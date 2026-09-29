@@ -1,3 +1,9 @@
+// GitHub emits empty strings for unset secrets. electron-builder treats an empty
+// CSC_LINK as a certificate path, so absent signing credentials must be unset.
+for (const key of ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
+  if (process.env[key] === '') delete process.env[key];
+}
+
 module.exports = {
   appId: 'net.cuesc.cuescord', productName: 'Cuescord',
   artifactName: 'Cuescord-${version}-${os}-${arch}.${ext}',
