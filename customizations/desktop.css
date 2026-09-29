@@ -1,0 +1,5 @@
+/* Este CSS só é carregado pelo executável Electron, sobre o front-end compartilhado.
+   Use os mesmos tokens e seletores de apps/web; não copie o globals.css para cá. */
+:root {
+  overscroll-behavior: none;
+}

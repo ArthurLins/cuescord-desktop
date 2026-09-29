@@ -1,0 +1,6 @@
+# Keep dependency installation independent when this repository is a submodule.
+packages:
+  - '.'
+onlyBuiltDependencies:
+  - electron
+  - koffi

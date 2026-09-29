@@ -1,0 +1,26 @@
+# Componentes de terceiros
+
+A licença MIT do cliente não substitui as licenças das dependências.
+Consulte package.json e pnpm-lock.yaml para versões e integridades exatas.
+
+| Componente | Papel | Licença / fonte |
+| --- | --- | --- |
+| Electron | Runtime Chromium + Node | MIT e avisos dos componentes: https://github.com/electron/electron |
+| Koffi | Ponte FFI para resolver processos no Windows | MIT: https://github.com/Koromix/koffi |
+| loopback-capture | Captura WASAPI Process Loopback | MIT: https://github.com/WerdoxDev/loopback-capture |
+| electron-builder | Empacotamento, usado no build | MIT: https://github.com/electron-userland/electron-builder |
+| Playwright | Ferramentas das suites existentes | Apache-2.0: https://github.com/microsoft/playwright |
+| pnpm | Gerenciador de dependências | MIT: https://github.com/pnpm/pnpm |
+
+Dependências transitivas têm seus próprios autores e licenças. Após instalar,
+`pnpm licenses list --prod` lista as dependências de produção presentes nessa
+plataforma. Esse comando não inclui todos os componentes internos do Chromium;
+o runtime Electron distribui LICENSE/LICENCE e LICENSES.chromium.html nos seus
+recursos (a localização depende do sistema).
+
+Módulos nativos vêm das distribuições upstream, incluindo binários N-API.
+O cliente usa utilitários do sistema Linux (PulseAudio e X11); o pacote .deb
+declara dependências e não incorpora o código desses utilitários.
+
+Os ícones do cliente ficam em assets/icons, com a fonte SVG disponível. A licença
+do código não concede exclusividade ou endosso sobre o nome/marca Cuescord.

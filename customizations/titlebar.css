@@ -1,0 +1,98 @@
+/* Adotado no documento e no shadow DOM, somente no cliente Windows.
+   Os tokens de cor/fontes vêm do front-end compartilhado. */
+:root {
+  --desktop-titlebar-height: 32px;
+  --desktop-content-inset: var(--desktop-titlebar-height);
+  --desktop-drag-left-width: calc(100% - 132px);
+}
+
+/* A shell autenticada já reserva 32px para a busca. Os controles ocupam as
+   laterais dessa mesma faixa, preservando o botão de busca React ao centro. */
+:root:has(.h-dvh > .h-8) {
+  --desktop-content-inset: 0px;
+  --desktop-drag-left-width: calc(50% - 224px);
+}
+
+body { padding-top: var(--desktop-content-inset); background: var(--guild-rail, #16161a); }
+.h-dvh { height: calc(100dvh - var(--desktop-content-inset)); }
+.min-h-dvh { min-height: calc(100dvh - var(--desktop-content-inset)); }
+.min-h-screen { min-height: calc(100vh - var(--desktop-content-inset)); }
+
+/* Sem regras globais para button/svg: a UI React mantém seus próprios estilos. */
+:host { --desktop-control-width: 44px; }
+slot { display: contents; }
+.desktop-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--desktop-titlebar-height);
+  z-index: 2147483647;
+  color: var(--muted-foreground, #a4a4b0);
+  background: transparent;
+  font: 600 12px var(--font-geist-sans, "Segoe UI", sans-serif);
+  user-select: none;
+  pointer-events: none;
+}
+.desktop-drag-left, .desktop-drag-right {
+  -webkit-app-region: drag;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+}
+.desktop-drag-left { left: 0; width: var(--desktop-drag-left-width); }
+.desktop-drag-right { left: calc(50% + 224px); right: 132px; }
+.desktop-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  padding-inline: 12px;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+.desktop-brand svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+.desktop-window-controls {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  pointer-events: auto;
+}
+.desktop-window-controls button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: var(--desktop-control-width);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+}
+.desktop-window-controls button:hover { background: var(--accent, #3b3b44); color: var(--foreground, #f2f3f5); }
+.desktop-window-controls button:active { background: var(--secondary, #303037); }
+.desktop-window-controls button[data-action="close"]:hover { background: var(--destructive, #f23f43); color: #fff; }
+.desktop-window-controls button:focus-visible { outline: 2px solid var(--ring, #8b9bff); outline-offset: -3px; }
+.desktop-window-controls svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1; pointer-events: none; }
+.desktop-titlebar.inactive .desktop-brand { opacity: 0.55; }
+.desktop-window-error:not(:empty) {
+  position: absolute;
+  right: 8px;
+  top: 36px;
+  max-width: 300px;
+  padding: 10px;
+  border: 1px solid var(--border, #35353e);
+  border-radius: 8px;
+  background: var(--popover, #111214);
+  color: var(--foreground, #f2f3f5);
+}
+@media (prefers-reduced-motion: reduce) { .desktop-brand { transition: none; } }
