@@ -28,7 +28,7 @@ Na ausência de certificados, Windows fica sem assinatura de publicador e macOS
 usa assinatura ad-hoc, sem notarização; o sistema pode bloquear a primeira
 abertura. Consulte [distribuição e assinatura](docs/RELEASING.md).
 
-No Debian: `sudo apt install ./Cuescord-0.3.0-linux-amd64.deb`.
+No Debian: `sudo apt install ./Cuescord-0.3.1-linux-amd64.deb`.
 O APT resolve as dependências declaradas pelo pacote. Não são necessários Rust,
 WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 

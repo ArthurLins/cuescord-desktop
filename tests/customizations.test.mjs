@@ -11,7 +11,7 @@ const script = `(${source})(${JSON.stringify(options)});`;
 function page(origin = options.origin, frame = false) {
   const window = { location: { origin } };
   window.top = frame ? {} : window;
-  const document = { adoptedStyleSheets: [] };
+  const document = { adoptedStyleSheets: [], hidden: false, addEventListener() {}, getAnimations: () => [] };
   class CSSStyleSheet {
     replaceSync(value) { this.css = value; }
   }

@@ -23,7 +23,7 @@ function createWindow(appSession) {
     webPreferences: {
       session: appSession, preload: path.join(__dirname, '../dist/preload.cjs'),
       sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false,
-      spellcheck: true,
+      spellcheck: true, backgroundThrottling: true,
       additionalArguments: [`--cuescord-origin=${encodeURIComponent(new URL(trustedUrl).origin)}`],
     },
   });
@@ -77,6 +77,8 @@ else {
       }
       switch (action) {
         case 'minimize': return mainWindow.minimize();
+        case 'pause-image-animations': return mainWindow.webContents.setImageAnimationPolicy('noAnimation');
+        case 'resume-image-animations': return mainWindow.webContents.setImageAnimationPolicy('animate');
         case 'toggle-maximize': return mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
         case 'is-maximized': return mainWindow.isMaximized();
         case 'close': return mainWindow.close();

@@ -15,6 +15,59 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
   sheet.replaceSync(css);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 
+  // No polling or React-owned DOM changes. Calls, sockets and audio stay alive.
+  const restingSheet = new CSSStyleSheet();
+  const pausedAnimations = new Set();
+  const pausedVideos = new Map();
+  function pauseSilentVideo(video) {
+    if (video.tagName !== "VIDEO" || video.paused) return;
+    if (video.muted || video.srcObject?.getAudioTracks?.().length === 0) {
+      pausedVideos.set(video, { src: video.currentSrc, stream: video.srcObject });
+      video.pause();
+    }
+  }
+  function updateVisibility() {
+    const hidden = document.hidden;
+    // Chromium applies this policy only when an image source is (re)assigned.
+    // Defer until IPC finishes, retaining the cached resource and React's DOM.
+    if (appWindow?.setImageAnimationPolicy) {
+      void appWindow.setImageAnimationPolicy(hidden ? "noAnimation" : "animate").then(() => {
+        for (const img of document.images) {
+          const src = img.getAttribute("src");
+          if (src) img.setAttribute("src", src);
+        }
+      }).catch(error => console.error("Falha ao suspender imagens animadas:", error));
+    }
+    if (hidden) {
+      for (const video of document.querySelectorAll("video")) pauseSilentVideo(video);
+      for (const animation of document.getAnimations()) {
+        if (animation.playState === "running") { pausedAnimations.add(animation); animation.pause(); }
+      }
+      restingSheet.replaceSync(`
+        *, *::before, *::after {
+          animation-play-state: paused !important;
+          transition: none !important;
+          scroll-behavior: auto !important;
+          caret-color: transparent !important;
+        }
+      `);
+      if (!document.adoptedStyleSheets.includes(restingSheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, restingSheet];
+    } else {
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(item => item !== restingSheet);
+      for (const animation of pausedAnimations) {
+        if (animation.playState === "paused" && animation.effect?.target?.isConnected) animation.play();
+      }
+      pausedAnimations.clear();
+      for (const [video, source] of pausedVideos) {
+        if (video.isConnected && video.paused && video.currentSrc === source.src && video.srcObject === source.stream) void video.play().catch(() => {});
+      }
+      pausedVideos.clear();
+    }
+  }
+  document.addEventListener("visibilitychange", updateVisibility);
+  document.addEventListener("play", event => { if (document.hidden) pauseSilentVideo(event.target); }, true);
+  updateVisibility();
+
   if (platform !== "windows") return;
 
   function mountTitlebar() {

@@ -15,6 +15,7 @@ if (process.isMainFrame && originArg) {
     const platform = { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform];
     contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', screenAudio: (${audioBridge})(ipcRenderer) });
     const controls = {
+      setImageAnimationPolicy: policy => ipcRenderer.invoke('cuescord:window', policy === 'noAnimation' ? 'pause-image-animations' : 'resume-image-animations'),
       minimize: () => ipcRenderer.invoke('cuescord:window', 'minimize'),
       toggleMaximize: () => ipcRenderer.invoke('cuescord:window', 'toggle-maximize'),
       isMaximized: () => ipcRenderer.invoke('cuescord:window', 'is-maximized'),
