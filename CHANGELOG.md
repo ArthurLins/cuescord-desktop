@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Atualização pelo botão da barra Windows ou pelo menu Ajuda, em janela local isolada.
+- Releases autenticadas por Ed25519, downloads verificados com SHA-512 e proteção contra downgrade/replay de versões já conhecidas.
+- Download com progresso, cancelamento e confirmação nativa antes de abrir o instalador.
+- Chave privada local protegida com DPAPI; assinatura das releases independente de certificados Windows/macOS.
+- Pipeline publica manifesto assinado junto dos três instaladores e recusa sobrescrever releases.
+
 ## 0.3.1
 
 - Suspende animações e vídeos silenciosos quando a janela fica em segundo plano.

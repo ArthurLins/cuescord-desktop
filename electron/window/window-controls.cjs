@@ -1,6 +1,6 @@
 const { sameOrigin } = require('../security/policy.cjs');
 
-function installWindowControls({ ipcMain, getWindow, ownsContents, trustedUrl }) {
+function installWindowControls({ ipcMain, getWindow, ownsContents, trustedUrl, openUpdates }) {
   ipcMain.handle('cuescord:window', (event, action) => {
     if (
       !ownsContents(event.sender) ||
@@ -11,6 +11,8 @@ function installWindowControls({ ipcMain, getWindow, ownsContents, trustedUrl })
     }
     const window = getWindow();
     switch (action) {
+      case 'updates':
+        return openUpdates?.();
       case 'minimize':
         return window.minimize();
       case 'pause-image-animations':

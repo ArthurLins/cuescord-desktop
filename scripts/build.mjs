@@ -33,6 +33,7 @@ if (process.isMainFrame && originArg) {
       toggleMaximize: () => ipcRenderer.invoke('cuescord:window', 'toggle-maximize'),
       isMaximized: () => ipcRenderer.invoke('cuescord:window', 'is-maximized'),
       close: () => ipcRenderer.invoke('cuescord:window', 'close'),
+      updates: () => ipcRenderer.invoke('cuescord:window', 'updates'),
     };
     (${source})({ origin, version: ${JSON.stringify(version)}, platform, css: ${JSON.stringify(css)}, titlebarCss: ${JSON.stringify(titlebarCss)} }, controls);
     (${captureModal})(ipcRenderer, ${JSON.stringify(captureCss)});
@@ -41,4 +42,8 @@ if (process.isMainFrame && originArg) {
 `;
 await mkdir(new URL('dist/', root), { recursive: true });
 await writeFile(new URL('dist/preload.cjs', root), preload);
+await writeFile(
+  new URL('dist/updater-preload.cjs', root),
+  await readFile(new URL('electron/update/preload.cjs', root)),
+);
 console.log(`Cuescord Desktop ${version}: preload gerado.`);

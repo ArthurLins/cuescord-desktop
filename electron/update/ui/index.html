@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Atualizações do Cuescord</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <span class="brand">CUESCORD DESKTOP</span>
+      <h1>Atualizações</h1>
+      <p id="version"></p>
+      <section aria-live="polite" aria-atomic="true">
+        <h2 id="heading">Pronto para verificar</h2>
+        <p id="message">Confira se há uma nova versão do aplicativo.</p>
+      </section>
+      <progress id="progress" max="100" value="0" aria-label="Progresso do download" hidden></progress>
+      <p id="detail" class="detail"></p>
+      <div class="actions">
+        <button id="cancel" class="secondary" hidden>Cancelar download</button>
+        <button id="action">Verificar atualização</button>
+      </div>
+    </main>
+  </body>
+</html>

@@ -18,6 +18,7 @@ module.exports = {
   files: [
     'electron/**/*',
     'dist/preload.cjs',
+    'dist/updater-preload.cjs',
     'assets/icons/**/*',
     'package.json',
     'LICENSE',

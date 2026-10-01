@@ -5,6 +5,7 @@
 /src-tauri/
 /test-results/
 /playwright-report/
+/.update-signing/
 /.cache/
 /.pnpm-store/
 *.log

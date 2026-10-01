@@ -110,6 +110,9 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
         </div>
         <div class="desktop-drag-right"></div>
         <div class="desktop-window-controls">
+          <button type="button" data-action="updates" aria-label="Atualizações do Cuescord" title="Atualizações do Cuescord">
+            <svg viewBox="0 0 12 12"><path d="M6 1v7m-3-3 3 3 3-3M1.5 9v2h9V9"/></svg>
+          </button>
           <button type="button" data-action="minimize" aria-label="Minimizar" title="Minimizar">
             <svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg>
           </button>
@@ -185,6 +188,7 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
     }
 
     const actions = {
+      updates: () => appWindow.updates(),
       minimize: () => appWindow.minimize(),
       maximize: toggleMaximize,
       close: () => appWindow.close(),

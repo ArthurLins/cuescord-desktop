@@ -3,7 +3,7 @@
 :root {
   --desktop-titlebar-height: 32px;
   --desktop-content-inset: var(--desktop-titlebar-height);
-  --desktop-drag-left-width: calc(100% - 132px);
+  --desktop-drag-left-width: calc(100% - 176px);
 }
 
 /* A shell autenticada já reserva 32px para a busca. Os controles ocupam as
@@ -59,7 +59,7 @@ slot {
 }
 .desktop-drag-right {
   left: calc(50% + 224px);
-  right: 132px;
+  right: 176px;
 }
 .desktop-brand {
   display: flex;

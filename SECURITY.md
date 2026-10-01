@@ -35,6 +35,42 @@ revogadas em navegação, encerramento ou saída.
 - No Linux, o cliente consulta metadados de processos e streams de áudio para
   escolher a fonte e excluir seus próprios processos. Veja ARCHITECTURE.md.
 
+## Atualizações
+
+A janela de atualização é local, com sandbox, isolamento de contexto e CSP sem
+conexões de rede. O site remoto pode abrir essa janela, mas não pode verificar,
+baixar ou executar instaladores. O IPC exige a janela, o frame principal e a URL
+local exatos; navegação, subframes, outras janelas e argumentos extras são recusados.
+
+O processo principal consulta somente releases estáveis do repositório público
+ArthurLins/cuescord-desktop via HTTPS, sem cookies ou tokens. Downloads seguem apenas
+redirecionamentos HTTPS para os hosts de assets do GitHub explicitamente permitidos.
+O manifesto exige uma assinatura Ed25519 da chave pública embutida no cliente;
+os bytes assinados incluem versão, plataforma, arquitetura, nome, tamanho e SHA-512.
+O download tem limites de tamanho, tempo e redirecionamentos. Arquivos parciais
+são removidos; o arquivo final é verificado novamente antes de abrir o instalador.
+
+Versões menores ou iguais à instalada não são instaladas. O cliente guarda o
+manifesto assinado da maior versão conhecida em userData/updates e recusa releases
+anteriores a ela. Esse histórico detecta replay de versões já vistas; não detecta
+uma release assinada antiga nunca vista ou a exclusão do histórico por quem pode
+alterar o perfil local. A chave de assinatura e o workflow de publicação são parte
+da confiança. Um atacante com acesso à conta local ou à chave privada está fora
+dessa proteção; assinatura não comprova ausência de bugs na nova versão.
+
+A instalação exige ação na janela local e confirmação nativa com cancelamento
+como padrão. Windows conserva a marca de download da Internet; macOS conserva
+a quarentena. A assinatura do manifesto não substitui certificados de publicador,
+SmartScreen ou Gatekeeper. Não se executa instalador silencioso nem comando
+fornecido pelo site. Linux/macOS usam a instalação normal de .deb/.dmg.
+
+O Git distribui somente a chave pública. A chave privada inicial é protegida por
+Windows DPAPI CurrentUser, fica em .update-signing ignorado pelo Git e não é
+incluída no aplicativo. O secret UPDATE_SIGNING_PRIVATE_KEY é acessado apenas
+pelo job de publicação de tags, separado dos builds e PRs. Releases são publicadas
+somente depois de incluir todos os arquivos e o manifesto; assets publicados não
+são sobrescritos pelo workflow.
+
 ## Builds e terceiros
 
 Instaladores incluem Electron/Chromium e módulos nativos de terceiros obtidos

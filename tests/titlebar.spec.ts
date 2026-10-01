@@ -39,6 +39,9 @@ test.beforeEach(async ({ page }) => {
           state.maximized = !state.maximized;
           state.calls.push('maximize');
         },
+        updates: async () => {
+          state.calls.push('updates');
+        },
         close: async () => {
           state.calls.push('close');
         },
@@ -234,4 +237,15 @@ test('window controls remain usable above a modal and return when it closes', as
     ),
   ).toEqual(['minimize', 'maximize']);
   expect(await page.locator('#modal').evaluate((dialog) => dialog.children.length)).toBe(1);
+});
+
+test('update button opens native updates above a modal', async ({ page }) => {
+  await page.goto('https://cuescord.test/app');
+  await page.locator('#modal').evaluate((dialog: HTMLDialogElement) => dialog.showModal());
+  await page.getByRole('button', { name: 'Atualizações do Cuescord', exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { desktopTest: { calls: string[] } }).desktopTest.calls,
+    ),
+  ).toEqual(['updates']);
 });

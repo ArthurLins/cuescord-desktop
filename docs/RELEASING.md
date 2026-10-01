@@ -10,16 +10,65 @@ da plataforma nem o serviço de produção. As ações são fixadas por commit.
 
 ## Publicar
 
+Antes da primeira release com atualizador, configure **UPDATE_SIGNING_PRIVATE_KEY**
+no repositório ArthurLins/cuescord-desktop. A chave pública correspondente está em
+electron/update/trusted-keys.json. A chave privada inicial foi gerada localmente
+em .update-signing/private-key.dpapi: é ignorada pelo Git, protegida pela conta
+Windows que a criou e nunca é incluída no pacote.
+
+Na mesma conta Windows, com GitHub CLI autenticado e permissão para secrets, execute:
+
+```powershell
+node scripts/update-key.mjs upload
+```
+
+O comando descriptografa apenas em memória e envia o secret pelo stdin para
+`gh secret set UPDATE_SIGNING_PRIVATE_KEY`. Não imprime a chave nem grava uma cópia
+em texto puro. O secret contém a chave privada Ed25519 em PKCS8 DER/base64.
+Não execute generate novamente: o script recusa substituir uma chave já fixada.
+Em uma instalação inicial sem chave pública, `node scripts/update-key.mjs generate`
+gera o par e salva a parte pública no cliente. Não troque a chave pública por uma
+gerada em outro computador para tentar recuperar a chave privada.
+
+Proteja o backup da conta Windows e o arquivo DPAPI. Esse arquivo não pode ser
+descriptografado por outra conta/computador sem a recuperação da proteção DPAPI.
+GitHub não permite ler o valor de um secret já enviado. Perder a chave privada
+impede assinar atualizações aceitas pelos clientes existentes. Rotação exige um
+plano de distribuição de novas chaves e assinaturas de transição; não remova a
+chave fixada dos clientes/release para uma troca improvisada.
+
 1. Atualize version em package.json e CHANGELOG.md.
 2. Envie o commit revisado para main.
 3. Crie uma tag correspondente à versão:
-   `git tag -a v0.3.0 -m "Cuescord Desktop 0.3.0"`.
-4. Publique: `git push origin v0.3.0`.
+   `git tag -a v0.4.0 -m "Cuescord Desktop 0.4.0"`.
+4. Publique: `git push origin v0.4.0`.
 
 A tag precisa corresponder exatamente a package.json. Depois dos três builds,
-um job separado com contents:write publica a release. Builds e PRs usam apenas
+um job separado com contents:write assina update-manifest.json e publica a release.
+Ausência do secret, chave incompatível, hashes ou provenance incorretos interrompem
+a publicação. Builds e PRs usam apenas
 contents:read e não publicam. Não é utilizado pull_request_target.
 Artifacts de Actions ficam disponíveis por 14 dias; releases preservam downloads.
+
+A publicação começa em draft, inclui todos os assets e só então torna a release
+pública. O workflow recusa qualquer release existente e não usa --clobber. Se um
+run interrompido deixar um draft, confira os assets antes de remover o draft e
+reexecutar. Releases públicas devem receber uma versão nova, sem trocar assets.
+
+Clientes até 0.3.1 não têm atualizador: instale 0.4.0 manualmente uma vez. Depois,
+o botão verifica a release estável mais recente do repositório fixado. Uma versão
+mais nova só é oferecida após validar a assinatura do manifesto. Windows abre
+o NSIS verificado e fecha o cliente após confirmação; Linux/macOS abrem .deb/.dmg
+e exigem concluir a instalação pelo sistema. Não são usados sudo, instaladores
+silenciosos ou desvios das proteções do sistema. O atualizador fica desativado
+quando o cliente roda a partir do código.
+
+Antes de publicar, execute `pnpm desktop:check`, `pnpm format:check`, `pnpm test`
+e `pnpm test:ui` (este último exige Chromium/ambiente gráfico). Os testes cobrem
+assinatura, adulteração, download parcial/cancelado, redirects, downgrade/replay,
+verificação no disco e IPC de outros renderers, inclusive no Electron real.
+Valide a instalação usando duas versões em uma VM Windows; a suíte não altera
+o cliente instalado no computador do desenvolvedor.
 
 Os arquivos build-info incluem commit, plataforma, arquitetura, versões,
 link do run e SHA-256 do instalador. Confira sha256sums com sha256sum -c no Linux,
@@ -30,7 +79,8 @@ os builds não são certificados como reproduzíveis byte a byte.
 
 ## Certificados opcionais
 
-O pipeline funciona sem segredos de assinatura. Nesse caso, Windows não tem
+Os certificados de publicador são opcionais; a chave de atualização Ed25519 é
+obrigatória para publicar releases. Sem certificado Windows, o instalador não tem
 assinatura de publicador; macOS usa assinatura ad-hoc, sem Developer ID e sem
 notarização. Isso pode impedir instalação/abertura padrão via SmartScreen ou
 Gatekeeper. Não há certificado de distribuição incluído no Git.
@@ -51,7 +101,8 @@ No macOS, preencha o certificado e as três credenciais de notarização juntos.
 A configuração ativa notarização somente quando as três variáveis existem.
 PRs e builds de branches não recebem certificados. Falhas de assinatura/notarização
 devem ser resolvidas antes de distribuir uma release como assinada.
-Nenhum atualizador automático foi configurado.
+Assinar o manifesto permite ao cliente autenticar o download sem certificado
+Windows, mas não remove os alertas/bloqueios de publicador desconhecido do sistema.
 
 Referências: [runners GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 e [código do electron-builder](https://github.com/electron-userland/electron-builder).

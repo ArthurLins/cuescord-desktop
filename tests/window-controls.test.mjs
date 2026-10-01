@@ -26,6 +26,7 @@ function setup() {
     getWindow: () => window,
     ownsContents: (sender) => sender === contents,
     trustedUrl: 'https://cuescord.cuesc.net',
+    openUpdates: () => actions.push('updates'),
   });
   return { handle, actions, event: { sender: contents, senderFrame: frame } };
 }
@@ -52,4 +53,11 @@ test('other windows, subframes and origins cannot control the app', () => {
   event.senderFrame.url = 'https://untrusted.example';
   assert.throws(() => handle(event, 'close'), /não autorizada/);
   assert.deepEqual(actions, []);
+});
+
+test('trusted window can only open the local update window', () => {
+  const { handle, actions, event } = setup();
+  handle(event, 'updates');
+  assert.deepEqual(actions, ['updates']);
+  assert.throws(() => handle({ ...event, sender: {} }, 'updates'), /não autorizada/);
 });

@@ -13,6 +13,7 @@ const {
 const { PRODUCTION_URL, appUrl, sameOrigin, externalUrl } = require('./security/policy.cjs');
 const { installPermissions } = require('./security/permissions.cjs');
 const { installCapture } = require('./capture/capture.cjs');
+const { installUpdates } = require('./update/window.cjs');
 const { installAudio } = require('./audio/audio.cjs');
 
 app.setName('Cuescord');
@@ -123,16 +124,29 @@ else {
         audio,
       });
       app.on('before-quit', audio.revoke);
-      installWindowControls({ ipcMain, getWindow: () => mainWindow, ownsContents, trustedUrl });
+      const updates = installUpdates({ app, ipcMain, getWindow: () => mainWindow });
+      installWindowControls({
+        ipcMain,
+        getWindow: () => mainWindow,
+        ownsContents,
+        trustedUrl,
+        openUpdates: updates.show,
+      });
       Menu.setApplicationMenu(
-        process.platform === 'darwin'
-          ? Menu.buildFromTemplate([
-              { role: 'appMenu' },
-              { role: 'editMenu' },
-              { role: 'viewMenu' },
-              { role: 'windowMenu' },
-            ])
-          : null,
+        Menu.buildFromTemplate([
+          ...(process.platform === 'darwin'
+            ? [
+                { role: 'appMenu' },
+                { role: 'editMenu' },
+                { role: 'viewMenu' },
+                { role: 'windowMenu' },
+              ]
+            : []),
+          {
+            label: 'Ajuda',
+            submenu: [{ label: 'Atualizações do Cuescord…', click: updates.show }],
+          },
+        ]),
       );
       createWindow(appSession);
       app.on('activate', () => {

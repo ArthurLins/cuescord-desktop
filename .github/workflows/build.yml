@@ -82,11 +82,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: installer-*
           path: artifacts
           merge-multiple: true
+      - name: Sign update manifest
+        env:
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/sign-update.mjs
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -100,6 +111,7 @@ jobs:
           - Debian/Ubuntu amd64 (.deb)
           - macOS Apple Silicon arm64 (.dmg); sem versão Intel
 
+          update-manifest.json autentica os instaladores com a chave pública embutida no cliente.
           Consulte os arquivos build-info e sha256sums para identificar commit, runtime e hashes.
           Assinatura de publicador/notarização dependem dos certificados configurados pelo mantenedor.
           Sem certificados, Windows não tem assinatura de publicador e macOS usa assinatura ad-hoc.
@@ -107,7 +119,9 @@ jobs:
           A interface é carregada do serviço remoto; este repositório contém o cliente desktop.
           EOF
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" artifacts/* --clobber
-          else
-            gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "Cuescord Desktop $RELEASE_TAG" --notes-file notes.md
+            echo "Release already exists. Refusing to replace signed assets. Publish a new version."
+            exit 1
           fi
+          gh release create "$RELEASE_TAG" --draft --verify-tag --title "Cuescord Desktop $RELEASE_TAG" --notes-file notes.md
+          gh release upload "$RELEASE_TAG" artifacts/*
+          gh release edit "$RELEASE_TAG" --draft=false --latest

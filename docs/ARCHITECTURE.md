@@ -18,6 +18,10 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | --- | --- |
 | electron/main.cjs | Uma janela, sessão persistente, links externos e controles |
 | electron/window/window-controls.cjs | Comandos IPC da janela com validação de remetente |
+| electron/update/window.cjs, preload.cjs, ui/ | Janela local isolada; IPC exclusivo para atualização |
+| electron/update/policy.cjs, network.cjs, updater.cjs | HTTPS restrito, assinatura, download, verificação e abertura do instalador |
+| electron/update/trusted-keys.json | Chaves públicas de atualização fixadas no cliente |
+| scripts/sign-update.mjs, update-key.mjs | Assinatura da release e chave privada protegida por DPAPI |
 | electron/security/policy.cjs | URL de produção, origem exata e permissões permitidas |
 | electron/security/permissions.cjs | Pedidos de dispositivos; autorização de macOS |
 | electron/capture/capture.cjs | Enumeração de fontes, tokens de seleção, revogação |
@@ -32,7 +36,7 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | electron-builder.cjs | Lista explícita do conteúdo distribuído e dependências |
 | .github/workflows/build.yml | Builds por sistema e publicação de tags |
 
-O build empacota electron/, dist/preload.cjs, ícones, licença/avisos e dependências
+O build empacota electron/, dist/preload.cjs, dist/updater-preload.cjs, ícones, licença/avisos e dependências
 de produção. renderer/ é fonte pública de integração, consumida pelo site; não
 contém componentes da plataforma. O preload não requer arquivos JS arbitrários
 depois de empacotado. Os binários .node são extraídos do ASAR pelo empacotador.
@@ -55,6 +59,11 @@ Nenhum módulo de áudio aceita um PID arbitrário vindo da página.
 Não há serviço de sistema instalado nem captura persistente em segundo plano.
 
 ## Limites conhecidos
+
+Atualizações são manuais e usam a instalação nativa do sistema. O site só pode
+abrir a janela local; a janela controla os pedidos de atualização. Nenhuma chave
+privada ou script de publicação é empacotado. Veja SECURITY.md e RELEASING.md para
+o formato assinado, a cadeia de confiança e o preparo da primeira release.
 
 O site remoto participa da reprodução/transmissão: auditar apenas o instalador
 não audita a implementação do serviço. Várias janelas do mesmo aplicativo podem

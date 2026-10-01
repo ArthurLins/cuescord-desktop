@@ -23,12 +23,15 @@ Cada release inclui os instaladores, hashes SHA-256 e informações do build
 | Debian/Ubuntu | amd64 | `.deb` |
 | macOS, linha M (Apple Silicon) | arm64 | `.dmg` |
 
-Não geramos macOS Intel/x86 ou universal. Não há atualizador automático.
+Não geramos macOS Intel/x86 ou universal. A partir da versão 0.4.0, use o botão
+**Atualizações do Cuescord** na barra Windows ou **Ajuda → Atualizações do Cuescord**.
+O cliente verifica a release, baixa o instalador com progresso/cancelamento e exige
+assinatura Ed25519 e hash SHA-512 válidos antes de permitir instalar.
 Na ausência de certificados, Windows fica sem assinatura de publicador e macOS
 usa assinatura ad-hoc, sem notarização; o sistema pode bloquear a primeira
 abertura. Consulte [distribuição e assinatura](docs/RELEASING.md).
 
-No Debian: `sudo apt install ./Cuescord-0.3.1-linux-amd64.deb`.
+No Debian: `sudo apt install ./Cuescord-0.4.0-linux-amd64.deb`.
 O APT resolve as dependências declaradas pelo pacote. Não são necessários Rust,
 WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 
@@ -39,7 +42,11 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 - O preload injeta a barra Windows e o modal de compartilhamento, com IPC limitado.
 - Ao compartilhar áudio autorizado, um processo auxiliar captura PCM localmente.
 - Cookies, cache e armazenamento do site ficam no perfil local do Electron.
-- O cliente não configura serviço de inicialização, atualizador ou telemetria própria.
+- O atualizador consulta o GitHub apenas quando solicitado. No Windows, abre o
+  instalador verificado e fecha o cliente após confirmação; no Linux/macOS,
+  abre o pacote para concluir a instalação pelo sistema. Clientes anteriores
+  à versão 0.4.0 precisam de uma instalação manual inicial.
+- O cliente não configura serviço de inicialização ou telemetria própria.
   O site remoto e Chromium têm comportamento de rede próprio; veja os limites em
   [segurança e privacidade](SECURITY.md).
 
