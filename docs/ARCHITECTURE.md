@@ -17,15 +17,16 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | Caminho | Responsabilidade e acesso |
 | --- | --- |
 | electron/main.cjs | Uma janela, sessão persistente, links externos e controles |
-| electron/policy.cjs | URL de produção, origem exata e permissões permitidas |
-| electron/permissions.cjs | Pedidos de dispositivos; autorização de macOS |
-| electron/capture.cjs | Enumeração de fontes, tokens de seleção, revogação |
-| electron/audio.cjs | Concessão vinculada ao frame e ciclo do utilityProcess |
-| electron/audio-worker.cjs | WASAPI e FFI de user32.dll para PID da janela |
-| electron/audio-linux.cjs | pactl, parec, xprop e leitura de /proc/PID/stat |
-| customizations/audio.js | Ponte PCM sem expor o evento IPC ao site |
-| customizations/capture-modal.* | Modal, miniaturas e escolha de áudio |
-| customizations/desktop.js, titlebar.css | Barra Windows em shadow DOM |
+| electron/window/window-controls.cjs | Comandos IPC da janela com validação de remetente |
+| electron/security/policy.cjs | URL de produção, origem exata e permissões permitidas |
+| electron/security/permissions.cjs | Pedidos de dispositivos; autorização de macOS |
+| electron/capture/capture.cjs | Enumeração de fontes, tokens de seleção, revogação |
+| electron/audio/audio.cjs | Concessão vinculada ao frame e ciclo do utilityProcess |
+| electron/audio/audio-worker.cjs | WASAPI e FFI de user32.dll para PID da janela |
+| electron/audio/audio-linux.cjs | pactl, parec, xprop e leitura de /proc/PID/stat |
+| customizations/audio/audio.js | Ponte PCM sem expor o evento IPC ao site |
+| customizations/capture/capture-modal.* | Modal, miniaturas e escolha de áudio |
+| customizations/titlebar/desktop.js, titlebar.css | Barra Windows em shadow DOM |
 | renderer/ | Adaptador e worklet usados pela página de chamadas |
 | scripts/build.mjs | Incorpora fontes locais ao preload, sem baixar a plataforma |
 | electron-builder.cjs | Lista explícita do conteúdo distribuído e dependências |

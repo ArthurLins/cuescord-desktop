@@ -5,17 +5,32 @@ class ScreenAudioProcessor extends AudioWorkletProcessor {
     this.lanes = new Map();
     this.capacity = 24000;
     this.port.onmessage = ({ data: packet }) => {
-      if (!(packet.data instanceof ArrayBuffer) || packet.data.byteLength > 8192 || typeof packet.lane !== 'string') return;
+      if (
+        !(packet.data instanceof ArrayBuffer) ||
+        packet.data.byteLength > 8192 ||
+        typeof packet.lane !== 'string'
+      )
+        return;
       let lane = this.lanes.get(packet.lane);
       if (!lane) {
         if (this.lanes.size >= 64) return;
-        lane = { left: new Float32Array(this.capacity), right: new Float32Array(this.capacity), read: 0, write: 0, length: 0, seen: currentFrame };
+        lane = {
+          left: new Float32Array(this.capacity),
+          right: new Float32Array(this.capacity),
+          read: 0,
+          write: 0,
+          length: 0,
+          seen: currentFrame,
+        };
         this.lanes.set(packet.lane, lane);
       }
       const bytes = new DataView(packet.data);
       const frames = Math.floor(bytes.byteLength / 4);
       // Drop stale queued audio rather than accumulating delay on a slow renderer.
-      if (lane.length + frames > this.capacity) { lane.read = lane.write; lane.length = 0; }
+      if (lane.length + frames > this.capacity) {
+        lane.read = lane.write;
+        lane.length = 0;
+      }
       for (let i = 0; i < frames; i++) {
         lane.left[lane.write] = bytes.getInt16(i * 4, true) / 32768;
         lane.right[lane.write] = bytes.getInt16(i * 4 + 2, true) / 32768;
@@ -28,7 +43,10 @@ class ScreenAudioProcessor extends AudioWorkletProcessor {
   process(_inputs, outputs) {
     const [left, right] = outputs[0];
     for (const [id, lane] of this.lanes) {
-      if (currentFrame - lane.seen > sampleRate * 2 && lane.length === 0) { this.lanes.delete(id); continue; }
+      if (currentFrame - lane.seen > sampleRate * 2 && lane.length === 0) {
+        this.lanes.delete(id);
+        continue;
+      }
       const count = Math.min(left.length, lane.length);
       for (let i = 0; i < count; i++) {
         left[i] += lane.left[lane.read];

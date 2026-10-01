@@ -15,7 +15,9 @@ function createDesktopAudioBridge(ipcRenderer) {
           // Pass only PCM and a lane identifier, never Electron's IPC event object.
           const data = new Uint8Array(packet.data).buffer;
           onData({ lane: packet.lane, data });
-        } finally { ipcRenderer.send('cuescord:audio:credit', packet.id); }
+        } finally {
+          ipcRenderer.send('cuescord:audio:credit', packet.id);
+        }
       };
       current.ended = (_event, id) => {
         if (current.id && current.id !== id) return;
@@ -27,10 +29,16 @@ function createDesktopAudioBridge(ipcRenderer) {
       ipcRenderer.on('cuescord:audio:ended', current.ended);
       try {
         const result = await ipcRenderer.invoke('cuescord:audio:start');
-        if (!result) { detach(current); return null; }
+        if (!result) {
+          detach(current);
+          return null;
+        }
         current.id = result.id;
         return result;
-      } catch (error) { detach(current); throw error; }
+      } catch (error) {
+        detach(current);
+        throw error;
+      }
     },
     async stop(id) {
       if (active?.id === id) detach(active);

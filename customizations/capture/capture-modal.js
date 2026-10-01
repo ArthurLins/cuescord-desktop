@@ -20,7 +20,10 @@ function installCaptureModal(ipcRenderer, css) {
     if (current?.id === id) current.dispose();
   });
   ipcRenderer.on('cuescord:capture:open', (_event, model) => {
-    if (current) { void current.cancel(); current.dispose(); }
+    if (current) {
+      void current.cancel();
+      current.dispose();
+    }
     const previousFocus = document.activeElement;
     const dialog = document.createElement('dialog');
     dialog.setAttribute('data-cuescord-capture', '');
@@ -59,9 +62,13 @@ function installCaptureModal(ipcRenderer, css) {
       id: model.id,
       cancel: async () => {
         if (disposed) return;
-        try { await ipcRenderer.invoke('cuescord:capture:cancel', model.id); }
-        catch (error) { console.error(error); }
-        finally { entry.dispose(); }
+        try {
+          await ipcRenderer.invoke('cuescord:capture:cancel', model.id);
+        } catch (error) {
+          console.error(error);
+        } finally {
+          entry.dispose();
+        }
       },
       dispose: () => {
         if (disposed) return;
@@ -69,18 +76,26 @@ function installCaptureModal(ipcRenderer, css) {
         revision++;
         dialog.close();
         dialog.remove();
-        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(sheet => sheet !== outerCss);
+        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+          (sheet) => sheet !== outerCss,
+        );
         if (current === entry) current = undefined;
         if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
       },
     };
     current = entry;
     const updateOptions = () => {
-      root.querySelector('#screen-option').hidden = kind !== 'screen' || !['win32', 'linux'].includes(model.platform);
-      root.querySelector('#app-option').hidden = model.platform !== 'linux' || kind !== 'window' || !selection;
-      share.disabled = loading || submitting || !selection || (model.portal && kind === 'window' && !audioSelect.value);
+      root.querySelector('#screen-option').hidden =
+        kind !== 'screen' || !['win32', 'linux'].includes(model.platform);
+      root.querySelector('#app-option').hidden =
+        model.platform !== 'linux' || kind !== 'window' || !selection;
+      share.disabled =
+        loading ||
+        submitting ||
+        !selection ||
+        (model.portal && kind === 'window' && !audioSelect.value);
     };
-    const fillAudioApps = apps => {
+    const fillAudioApps = (apps) => {
       const previous = audioSelect.value;
       audioSelect.replaceChildren();
       const automatic = document.createElement('option');
@@ -93,14 +108,15 @@ function installCaptureModal(ipcRenderer, css) {
         option.textContent = app.name;
         audioSelect.append(option);
       }
-      if (apps.some(app => app.id === previous)) audioSelect.value = previous;
+      if (apps.some((app) => app.id === previous)) audioSelect.value = previous;
     };
     function renderSources(sources) {
       grid.replaceChildren();
       if (!sources.length) {
         const empty = document.createElement('p');
         empty.className = 'empty';
-        empty.textContent = kind === 'window' ? 'Nenhuma janela disponível.' : 'Nenhuma tela disponível.';
+        empty.textContent =
+          kind === 'window' ? 'Nenhuma janela disponível.' : 'Nenhuma tela disponível.';
         grid.append(empty);
       }
       for (const source of sources) {
@@ -125,7 +141,9 @@ function installCaptureModal(ipcRenderer, css) {
         button.addEventListener('click', () => {
           if (submitting) return;
           selection = source;
-          grid.querySelectorAll('.source').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+          grid
+            .querySelectorAll('.source')
+            .forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
           updateOptions();
         });
         grid.append(button);
@@ -139,7 +157,7 @@ function installCaptureModal(ipcRenderer, css) {
       screenAudio.checked = false;
       grid.setAttribute('aria-busy', 'true');
       grid.scrollTop = 0;
-      tabs.forEach(tab => {
+      tabs.forEach((tab) => {
         const selected = tab.dataset.kind === kind;
         tab.setAttribute('aria-selected', String(selected));
         tab.tabIndex = selected ? 0 : -1;
@@ -156,11 +174,19 @@ function installCaptureModal(ipcRenderer, css) {
         console.error('Listagem de fontes de captura:', error);
         if (!disposed && request === revision) renderSources([]);
       } finally {
-        if (!disposed && request === revision) { loading = false; grid.setAttribute('aria-busy', 'false'); updateOptions(); }
+        if (!disposed && request === revision) {
+          loading = false;
+          grid.setAttribute('aria-busy', 'false');
+          updateOptions();
+        }
       }
     }
-    tabs.forEach(tab => tab.addEventListener('click', () => { if (!submitting && tab.dataset.kind !== kind) void load(tab.dataset.kind); }));
-    root.querySelector('.tabs').addEventListener('keydown', event => {
+    tabs.forEach((tab) =>
+      tab.addEventListener('click', () => {
+        if (!submitting && tab.dataset.kind !== kind) void load(tab.dataset.kind);
+      }),
+    );
+    root.querySelector('.tabs').addEventListener('keydown', (event) => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || submitting) return;
       event.preventDefault();
       const index = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : kind === 'window' ? 1 : 0;
@@ -168,14 +194,20 @@ function installCaptureModal(ipcRenderer, css) {
       if (tabs[index].dataset.kind !== kind) void load(tabs[index].dataset.kind);
     });
     audioSelect.addEventListener('change', updateOptions);
-    root.querySelector('#refresh-audio').addEventListener('click', async event => {
+    root.querySelector('#refresh-audio').addEventListener('click', async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
       try {
         const apps = await ipcRenderer.invoke('cuescord:capture:audio-apps', model.id);
-        if (!disposed) { fillAudioApps(apps); updateOptions(); }
-      } catch (error) { console.error(error); }
-      finally { button.disabled = false; }
+        if (!disposed) {
+          fillAudioApps(apps);
+          updateOptions();
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        button.disabled = false;
+      }
     });
     share.addEventListener('click', async () => {
       if (share.disabled || !selection) return;
@@ -183,29 +215,54 @@ function installCaptureModal(ipcRenderer, css) {
       updateOptions();
       try {
         await ipcRenderer.invoke('cuescord:capture:select', model.id, selection.id, {
-          kind, audio: kind === 'screen' && screenAudio.checked,
+          kind,
+          audio: kind === 'screen' && screenAudio.checked,
           audioApp: kind === 'window' ? audioSelect.value : '',
         });
-      } catch (error) { console.error(error); }
-      finally { if (!disposed) { submitting = false; updateOptions(); } }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!disposed) {
+          submitting = false;
+          updateOptions();
+        }
+      }
     });
     root.querySelector('#cancel').addEventListener('click', () => void entry.cancel());
     root.querySelector('.close').addEventListener('click', () => void entry.cancel());
-    dialog.addEventListener('cancel', event => { event.preventDefault(); void entry.cancel(); });
-    dialog.addEventListener('close', () => { if (!disposed) void entry.cancel(); });
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      void entry.cancel();
+    });
+    dialog.addEventListener('close', () => {
+      if (!disposed) void entry.cancel();
+    });
     let outside = false;
-    const isOutside = event => {
+    const isOutside = (event) => {
       const bounds = dialog.getBoundingClientRect();
-      return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      return (
+        event.clientX < bounds.left ||
+        event.clientX > bounds.right ||
+        event.clientY < bounds.top ||
+        event.clientY > bounds.bottom
+      );
     };
-    dialog.addEventListener('pointerdown', event => { outside = event.target === dialog && isOutside(event); });
-    dialog.addEventListener('click', event => { if (outside && event.target === dialog && isOutside(event)) void entry.cancel(); outside = false; });
+    dialog.addEventListener('pointerdown', (event) => {
+      outside = event.target === dialog && isOutside(event);
+    });
+    dialog.addEventListener('click', (event) => {
+      if (outside && event.target === dialog && isOutside(event)) void entry.cancel();
+      outside = false;
+    });
     try {
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, outerCss];
       document.body.append(dialog);
       dialog.showModal();
       tabs[0].focus();
       void load(kind);
-    } catch (error) { console.error(error); void entry.cancel(); }
+    } catch (error) {
+      console.error(error);
+      void entry.cancel();
+    }
   });
 }

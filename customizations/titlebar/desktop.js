@@ -4,8 +4,8 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
   if (window.top !== window || window.location.origin !== origin) return;
 
   if (window.__CUESCORD_DESKTOP__) return;
-  Object.defineProperty(window, "__CUESCORD_DESKTOP__", {
-    value: Object.freeze({ version, platform, engine: "electron" }),
+  Object.defineProperty(window, '__CUESCORD_DESKTOP__', {
+    value: Object.freeze({ version, platform, engine: 'electron' }),
     writable: false,
     configurable: false,
   });
@@ -20,7 +20,7 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
   const pausedAnimations = new Set();
   const pausedVideos = new Map();
   function pauseSilentVideo(video) {
-    if (video.tagName !== "VIDEO" || video.paused) return;
+    if (video.tagName !== 'VIDEO' || video.paused) return;
     if (video.muted || video.srcObject?.getAudioTracks?.().length === 0) {
       pausedVideos.set(video, { src: video.currentSrc, stream: video.srcObject });
       video.pause();
@@ -31,17 +31,23 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
     // Chromium applies this policy only when an image source is (re)assigned.
     // Defer until IPC finishes, retaining the cached resource and React's DOM.
     if (appWindow?.setImageAnimationPolicy) {
-      void appWindow.setImageAnimationPolicy(hidden ? "noAnimation" : "animate").then(() => {
-        for (const img of document.images) {
-          const src = img.getAttribute("src");
-          if (src) img.setAttribute("src", src);
-        }
-      }).catch(error => console.error("Falha ao suspender imagens animadas:", error));
+      void appWindow
+        .setImageAnimationPolicy(hidden ? 'noAnimation' : 'animate')
+        .then(() => {
+          for (const img of document.images) {
+            const src = img.getAttribute('src');
+            if (src) img.setAttribute('src', src);
+          }
+        })
+        .catch((error) => console.error('Falha ao suspender imagens animadas:', error));
     }
     if (hidden) {
-      for (const video of document.querySelectorAll("video")) pauseSilentVideo(video);
+      for (const video of document.querySelectorAll('video')) pauseSilentVideo(video);
       for (const animation of document.getAnimations()) {
-        if (animation.playState === "running") { pausedAnimations.add(animation); animation.pause(); }
+        if (animation.playState === 'running') {
+          pausedAnimations.add(animation);
+          animation.pause();
+        }
       }
       restingSheet.replaceSync(`
         *, *::before, *::after {
@@ -51,29 +57,45 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
           caret-color: transparent !important;
         }
       `);
-      if (!document.adoptedStyleSheets.includes(restingSheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, restingSheet];
+      if (!document.adoptedStyleSheets.includes(restingSheet))
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, restingSheet];
     } else {
-      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(item => item !== restingSheet);
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (item) => item !== restingSheet,
+      );
       for (const animation of pausedAnimations) {
-        if (animation.playState === "paused" && animation.effect?.target?.isConnected) animation.play();
+        if (animation.playState === 'paused' && animation.effect?.target?.isConnected)
+          animation.play();
       }
       pausedAnimations.clear();
       for (const [video, source] of pausedVideos) {
-        if (video.isConnected && video.paused && video.currentSrc === source.src && video.srcObject === source.stream) void video.play().catch(() => {});
+        if (
+          video.isConnected &&
+          video.paused &&
+          video.currentSrc === source.src &&
+          video.srcObject === source.stream
+        )
+          void video.play().catch(() => {});
       }
       pausedVideos.clear();
     }
   }
-  document.addEventListener("visibilitychange", updateVisibility);
-  document.addEventListener("play", event => { if (document.hidden) pauseSilentVideo(event.target); }, true);
+  document.addEventListener('visibilitychange', updateVisibility);
+  document.addEventListener(
+    'play',
+    (event) => {
+      if (document.hidden) pauseSilentVideo(event.target);
+    },
+    true,
+  );
   updateVisibility();
 
-  if (platform !== "windows") return;
+  if (platform !== 'windows') return;
 
   function mountTitlebar() {
     // O body mantém todos os filhos que o Next/React hidrata. A barra vive no
     // shadow DOM e o slot exibe os elementos originais, inclusive os portals.
-    const shadow = document.body.attachShadow({ mode: "open" });
+    const shadow = document.body.attachShadow({ mode: 'open' });
     const chromeSheet = new CSSStyleSheet();
     chromeSheet.replaceSync(titlebarCss);
     shadow.adoptedStyleSheets = [chromeSheet];
@@ -102,17 +124,17 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
       </div>
       <slot></slot>`;
 
-    const titlebar = shadow.querySelector(".desktop-titlebar");
+    const titlebar = shadow.querySelector('.desktop-titlebar');
     const maximizeButton = shadow.querySelector('[data-action="maximize"]');
     const errorMessage = shadow.querySelector('[role="status"]');
     // showModal() torna o restante do documento inerte. Enquanto houver um
     // diálogo aberto, mantenha a mesma barra dentro dele, em outro shadow root.
     // Isso acontece após a montagem do diálogo, sem tocar na hidratação inicial.
-    const modalHost = document.createElement("div");
-    const modalShadow = modalHost.attachShadow({ mode: "open" });
+    const modalHost = document.createElement('div');
+    const modalShadow = modalHost.attachShadow({ mode: 'open' });
     modalShadow.adoptedStyleSheets = [chromeSheet];
     const modalObserver = new MutationObserver(() => {
-      const modal = [...document.querySelectorAll("dialog:modal")].at(-1);
+      const modal = [...document.querySelectorAll('dialog:modal')].at(-1);
       if (modal) {
         if (modalHost.parentElement !== modal) modal.append(modalHost);
         if (titlebar.parentNode !== modalShadow) modalShadow.append(titlebar);
@@ -121,13 +143,18 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
         modalHost.remove();
       }
     });
-    modalObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"], childList: true });
+    modalObserver.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+      childList: true,
+    });
     let stateRequest = 0;
     let toggling = false;
 
     function reportError(error) {
-      console.error("Falha no controle da janela do Cuescord:", error);
-      errorMessage.textContent = "Não foi possível controlar a janela. Tente novamente.";
+      console.error('Falha no controle da janela do Cuescord:', error);
+      errorMessage.textContent = 'Não foi possível controlar a janela. Tente novamente.';
     }
 
     async function refreshWindowState() {
@@ -135,13 +162,15 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
       try {
         const maximized = await appWindow.isMaximized();
         if (request !== stateRequest) return;
-        const label = maximized ? "Restaurar" : "Maximizar";
-        maximizeButton.setAttribute("aria-label", label);
+        const label = maximized ? 'Restaurar' : 'Maximizar';
+        maximizeButton.setAttribute('aria-label', label);
         maximizeButton.title = label;
-        maximizeButton.querySelector("path").setAttribute("d", maximized
-          ? "M3.5 3.5h7v7h-7zM1.5 8.5v-7h7"
-          : "M1.5 1.5h9v9h-9z");
-      } catch (error) { reportError(error); }
+        maximizeButton
+          .querySelector('path')
+          .setAttribute('d', maximized ? 'M3.5 3.5h7v7h-7zM1.5 8.5v-7h7' : 'M1.5 1.5h9v9h-9z');
+      } catch (error) {
+        reportError(error);
+      }
     }
 
     async function toggleMaximize() {
@@ -150,7 +179,9 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
       try {
         await appWindow.toggleMaximize();
         await refreshWindowState();
-      } finally { toggling = false; }
+      } finally {
+        toggling = false;
+      }
     }
 
     const actions = {
@@ -158,23 +189,23 @@ function initializeDesktop({ origin, version, platform, css, titlebarCss }, appW
       maximize: toggleMaximize,
       close: () => appWindow.close(),
     };
-    for (const button of shadow.querySelectorAll("[data-action]")) {
-      button.addEventListener("click", () => {
-        errorMessage.textContent = "";
+    for (const button of shadow.querySelectorAll('[data-action]')) {
+      button.addEventListener('click', () => {
+        errorMessage.textContent = '';
         void actions[button.dataset.action]().catch(reportError);
       });
     }
-    window.addEventListener("resize", refreshWindowState);
-    window.addEventListener("focus", () => {
-      titlebar.classList.remove("inactive");
+    window.addEventListener('resize', refreshWindowState);
+    window.addEventListener('focus', () => {
+      titlebar.classList.remove('inactive');
       void refreshWindowState();
     });
-    window.addEventListener("blur", () => titlebar.classList.add("inactive"));
+    window.addEventListener('blur', () => titlebar.classList.add('inactive'));
     void refreshWindowState();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mountTitlebar, { once: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountTitlebar, { once: true });
   } else {
     mountTitlebar();
   }

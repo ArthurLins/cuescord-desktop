@@ -20,7 +20,11 @@ function fail(error) {
 function stop() {
   if (stopping) return;
   stopping = true;
-  try { stopCapture?.(); } catch (error) { console.error(error); }
+  try {
+    stopCapture?.();
+  } catch (error) {
+    console.error(error);
+  }
   process.exit(0);
 }
 function windowsPid(sourceId) {
@@ -28,9 +32,15 @@ function windowsPid(sourceId) {
   if (!match) throw new Error('Identificador de janela inválido.');
   const koffi = require('koffi');
   const user32 = koffi.load('user32.dll');
-  const getPid = user32.func('uint32_t __stdcall GetWindowThreadProcessId(uintptr_t hwnd, _Out_ uint32_t *pid)');
-  const getClass = user32.func('int __stdcall GetClassNameW(uintptr_t hwnd, _Out_ uint16_t *name, int size)');
-  const findChild = user32.func('uintptr_t __stdcall FindWindowExW(uintptr_t parent, uintptr_t after, str16 className, str16 title)');
+  const getPid = user32.func(
+    'uint32_t __stdcall GetWindowThreadProcessId(uintptr_t hwnd, _Out_ uint32_t *pid)',
+  );
+  const getClass = user32.func(
+    'int __stdcall GetClassNameW(uintptr_t hwnd, _Out_ uint16_t *name, int size)',
+  );
+  const findChild = user32.func(
+    'uintptr_t __stdcall FindWindowExW(uintptr_t parent, uintptr_t after, str16 className, str16 title)',
+  );
   const hwnd = Number(match[1]);
   if (!Number.isSafeInteger(hwnd) || hwnd <= 0) throw new Error('Janela inválida.');
   const pid = [0];
@@ -53,7 +63,10 @@ function windowsPid(sourceId) {
 }
 port.on('message', async ({ data: message }) => {
   if (message.type === 'stop') return stop();
-  if (message.type === 'credit') { credits = Math.min(32, credits + 1); return; }
+  if (message.type === 'credit') {
+    credits = Math.min(32, credits + 1);
+    return;
+  }
   if (message.type !== 'start' || started) return;
   started = true;
   credits = 16;
@@ -64,14 +77,20 @@ port.on('message', async ({ data: message }) => {
       stopCapture = () => capture.stop();
       const window = message.config.kind === 'window';
       // Include only the selected app, or exclude the entire Cuescord process tree.
-      capture.start(window ? windowsPid(message.config.sourceId) : message.config.ownPid, window, bytes => sendAudio('app', bytes));
+      capture.start(
+        window ? windowsPid(message.config.sourceId) : message.config.ownPid,
+        window,
+        (bytes) => sendAudio('app', bytes),
+      );
     } else if (process.platform === 'linux') {
       const capture = require('./audio-linux.cjs').startLinuxAudio(message.config, sendAudio, fail);
       stopCapture = capture.stop;
       await capture.ready;
     } else throw new Error('Captura nativa de áudio indisponível nesta plataforma.');
     if (!stopping) port.postMessage({ type: 'ready' });
-  } catch (error) { fail(error); }
+  } catch (error) {
+    fail(error);
+  }
 });
 process.on('SIGTERM', stop);
 process.on('disconnect', stop);

@@ -15,6 +15,9 @@ Não inclua código de servidor, credenciais, dados de usuário, node_modules,
 perfis do navegador ou instaladores no Git.
 
 As suites existentes podem ser executadas com `pnpm test` e `pnpm test:ui`.
+Use `pnpm format`, `pnpm format:check` e `pnpm desktop:check` para manter a
+formatação e validar o preload e as subpastas do processo principal. A estrutura
+está documentada em [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Mudanças de captura também precisam de conferência manual no sistema envolvido:
 seleção/cancelamento, encerramento da chamada, navegação, dispositivos negados,
 áudio de outro aplicativo e exclusão do áudio da própria chamada.

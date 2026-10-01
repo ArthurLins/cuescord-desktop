@@ -64,7 +64,7 @@ pnpm desktop:dev
 local já iniciado, use `pnpm desktop:dev:existing` (localhost:3000). O cliente
 não inicia servidores de plataforma. Em desenvolvimento,
 `CUESCORD_DESKTOP_URL` aceita outra URL HTTPS ou HTTP de loopback.
-O executável empacotado sempre usa a URL em `electron/policy.cjs`.
+O executável empacotado sempre usa a URL em `electron/security/policy.cjs`.
 
 ## Gerar instaladores
 

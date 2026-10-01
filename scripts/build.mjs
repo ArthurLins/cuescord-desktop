@@ -1,9 +1,18 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss] = await Promise.all([
-  'customizations/desktop.js', 'customizations/desktop.css', 'customizations/titlebar.css', 'package.json', 'customizations/audio.js', 'customizations/capture-modal.js', 'customizations/capture-modal.css',
-].map(file => readFile(new URL(file, root), 'utf8')));
+const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss] =
+  await Promise.all(
+    [
+      'customizations/titlebar/desktop.js',
+      'customizations/titlebar/desktop.css',
+      'customizations/titlebar/titlebar.css',
+      'package.json',
+      'customizations/audio/audio.js',
+      'customizations/capture/capture-modal.js',
+      'customizations/capture/capture-modal.css',
+    ].map((file) => readFile(new URL(file, root), 'utf8')),
+  );
 const { version } = JSON.parse(manifest);
 // A sandboxed preload cannot load arbitrary modules. Embed only our local styles
 // and initializer; the remote page never receives Node or an unrestricted IPC API.

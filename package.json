@@ -3,8 +3,13 @@
   "version": "0.3.1",
   "private": true,
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/ArthurLins/cuescord-desktop.git" },
-  "bugs": { "url": "https://github.com/ArthurLins/cuescord-desktop/issues" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArthurLins/cuescord-desktop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ArthurLins/cuescord-desktop/issues"
+  },
   "packageManager": "pnpm@10.32.1",
   "type": "module",
   "description": "Comunidades, mensagens e chamadas no Cuescord Desktop.",
@@ -27,12 +32,15 @@
     "desktop:build:mac": "node scripts/build.mjs && electron-builder --config electron-builder.cjs --mac dmg --arm64 --publish never",
     "desktop:check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "format": "prettier --write \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\"",
+    "format:check": "prettier --check \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\""
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
     "electron": "44.5.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "prettier": "3.6.2"
   },
   "dependencies": {
     "koffi": "3.3.2"

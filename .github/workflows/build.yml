@@ -50,6 +50,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate preload and check JavaScript syntax
         run: pnpm desktop:check
+      - name: Check source formatting and unit tests
+        run: |
+          pnpm format:check
+          pnpm test
       - name: Check release version and runner architecture
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
