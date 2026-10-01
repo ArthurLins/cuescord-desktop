@@ -169,6 +169,8 @@ input:focus-visible {
   display: grid;
 }
 .options {
+  display: grid;
+  gap: 16px;
   padding: 0 28px;
 }
 .options:has(> :not([hidden])) {
@@ -186,12 +188,22 @@ input[type='checkbox'] {
   height: 18px;
   margin: 0;
 }
+.quality-option > label,
 #app-option > label {
   display: block;
   margin-bottom: 8px;
   color: #b5bac1;
   font-size: 12px;
   font-weight: 600;
+}
+.quality-option select {
+  width: 100%;
+}
+.quality-option p {
+  margin: 8px 0 0;
+  color: #b5bac1;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .app-controls {
   display: flex;

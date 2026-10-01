@@ -1,3 +1,4 @@
+const { screenQualities, screenQuality, defaultScreenQuality } = require('./quality.cjs');
 const { randomUUID } = require('node:crypto');
 const { sameOrigin } = require('../security/policy.cjs');
 
@@ -76,7 +77,9 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
     if (options.audioApp && !audioApp) throw new Error('Aplicativo de áudio inválido.');
     if (pending.portal && kind === 'window' && !audioApp)
       throw new Error('Selecione o aplicativo de áudio.');
+    const quality = screenQuality(options.quality);
     pending.finish(source, {
+      quality,
       kind,
       audioApp,
       enabled: kind === 'window' || options.audio === true,
@@ -120,7 +123,8 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
       contents.removeListener('did-start-navigation', cancelOnNavigation);
       contents.removeListener('render-process-gone', cancel);
       if (!contents.isDestroyed()) contents.send('cuescord:capture:close', entry.id);
-      if (source && permitted)
+      if (source && permitted) {
+        contents.send('cuescord:capture:quality', selection.quality);
         audio.authorize(owner, {
           ...selection,
           sourceId: source.id,
@@ -130,6 +134,7 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
               ['win32', 'linux'].includes(process.platform),
           ),
         });
+      }
       try {
         callback(source && permitted ? { video: source } : {});
       } catch (error) {
@@ -148,6 +153,8 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
       id: entry.id,
       platform: process.platform,
       portal: entry.portal,
+      qualityProfiles: screenQualities,
+      defaultQuality: defaultScreenQuality,
     });
   });
 }

@@ -1,3 +1,10 @@
+export interface DesktopScreenQuality {
+  width: number;
+  height: number;
+  frameRate: number;
+  maxBitrate: number;
+}
+
 type AudioPacket = { lane: string; data: ArrayBuffer };
 type AudioBridge = {
   start(onData: (packet: AudioPacket) => void, onEnded: () => void): Promise<{ id: string } | null>;
@@ -8,7 +15,11 @@ export function desktopEnvironment() {
   if (typeof window === 'undefined') return undefined;
   return (
     window as Window & {
-      __CUESCORD_DESKTOP__?: { engine?: string; screenAudio?: AudioBridge };
+      __CUESCORD_DESKTOP__?: {
+        engine?: string;
+        screenAudio?: AudioBridge;
+        screenShare?: { takeQuality(): DesktopScreenQuality | undefined };
+      };
     }
   ).__CUESCORD_DESKTOP__;
 }

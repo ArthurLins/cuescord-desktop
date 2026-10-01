@@ -41,6 +41,7 @@ function installCaptureModal(ipcRenderer, css) {
         </div>
         <section id="sources" role="tabpanel" aria-labelledby="windows-tab" tabindex="0"></section>
         <div class="options">
+          <div class="quality-option"><label for="screen-quality">Qualidade da transmissão</label><select id="screen-quality" aria-describedby="quality-help"></select><p id="quality-help">Qualidades maiores usam mais banda. A resolução e os FPS dependem da fonte e da conexão.</p></div>
           <label id="screen-option" hidden><input id="screen-audio" type="checkbox"><span>Compartilhar áudio</span></label>
           <div id="app-option" hidden><label for="audio-app">Áudio da janela</label><div class="app-controls"><select id="audio-app"></select><button id="refresh-audio" class="secondary">Atualizar</button></div></div>
         </div>
@@ -51,6 +52,14 @@ function installCaptureModal(ipcRenderer, css) {
     const share = root.querySelector('#share');
     const audioSelect = root.querySelector('#audio-app');
     const screenAudio = root.querySelector('#screen-audio');
+    const qualitySelect = root.querySelector('#screen-quality');
+    for (const profile of model.qualityProfiles) {
+      const option = document.createElement('option');
+      option.value = profile.id;
+      option.textContent = profile.label;
+      qualitySelect.append(option);
+    }
+    qualitySelect.value = model.defaultQuality;
     const tabs = [...root.querySelectorAll('[role="tab"]')];
     let kind = 'window';
     let selection;
@@ -89,6 +98,7 @@ function installCaptureModal(ipcRenderer, css) {
         kind !== 'screen' || !['win32', 'linux'].includes(model.platform);
       root.querySelector('#app-option').hidden =
         model.platform !== 'linux' || kind !== 'window' || !selection;
+      qualitySelect.disabled = submitting;
       share.disabled =
         loading ||
         submitting ||
@@ -216,6 +226,7 @@ function installCaptureModal(ipcRenderer, css) {
       try {
         await ipcRenderer.invoke('cuescord:capture:select', model.id, selection.id, {
           kind,
+          quality: qualitySelect.value,
           audio: kind === 'screen' && screenAudio.checked,
           audioApp: kind === 'window' ? audioSelect.value : '',
         });

@@ -22,7 +22,11 @@ if (process.isMainFrame && originArg) {
   const origin = decodeURIComponent(originArg.slice('--cuescord-origin='.length));
   if (window.location.origin === origin) {
     const platform = { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform];
-    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', screenAudio: (${audioBridge})(ipcRenderer) });
+    let captureQuality;
+    ipcRenderer.on('cuescord:capture:open', () => { captureQuality = undefined; });
+    ipcRenderer.on('cuescord:capture:quality', (_event, quality) => { captureQuality = quality; });
+    const screenShare = { takeQuality: () => { const quality = captureQuality; captureQuality = undefined; return quality; } };
+    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', screenShare, screenAudio: (${audioBridge})(ipcRenderer) });
     const controls = {
       setImageAnimationPolicy: policy => ipcRenderer.invoke('cuescord:window', policy === 'noAnimation' ? 'pause-image-animations' : 'resume-image-animations'),
       minimize: () => ipcRenderer.invoke('cuescord:window', 'minimize'),
