@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2
+
+- Fechar a janela mantém o aplicativo na bandeja, preservando chamadas e mensagens; o menu da bandeja permite reabrir ou encerrar o cliente.
+- Contador de mensagens não lidas no ícone da barra de tarefas do Windows, com indicador `99+` acima de 99 mensagens.
+- Ícones de chamada na janela e na bandeja mostram o estado do microfone e voltam ao ícone normal ao desconectar.
+- Ponte limitada para o serviço web enviar contagem e estado de chamada, com validação de origem, frame e argumentos; recargas e falhas do renderer limpam estados antigos.
+- Testes dos indicadores, isolamento da ponte e ciclo da bandeja no Electron real.
+
 ## 0.4.1
 
 - Tela local de recuperação quando o servidor fica indisponível, com retorno automático à última página após a conexão se estabilizar.

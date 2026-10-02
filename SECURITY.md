@@ -8,8 +8,13 @@ Este repositório permite auditar o cliente instalado e sua ponte nativa; não
 contém todo o código executado pelo site remoto nem certifica esse serviço.
 
 O renderer usa sandbox, contextIsolation e nodeIntegration=false. A ponte
-pública expõe somente metadados e áudio autorizado; não há IPC genérico,
+pública expõe metadados, indicadores de mensagens/chamada e áudio autorizado; não há IPC genérico,
 execução de comandos ou leitura arbitrária de arquivos disponíveis ao site.
+
+Os indicadores aceitam apenas contagem inteira não negativa e estados booleanos
+de chamada/microfone, enviados pelo frame principal da origem confiável. Alteram
+somente os ícones; não ativam dispositivos. Fechar a janela a oculta na bandeja,
+mantendo a sessão e uma chamada ativa. O menu **Fechar Cuescord** encerra o processo.
 
 A origem principal pode solicitar microfone, câmera, notificações, clipboard,
 fullscreen e captura. Permissões desconhecidas e outras origens são negadas.

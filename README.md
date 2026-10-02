@@ -40,6 +40,12 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 
 ## O que roda na sua máquina
 
+- Fechar a janela envia o cliente para a bandeja, preservando chamadas e mensagens.
+  Clique no ícone para reabrir; para encerrar, use **Fechar Cuescord** no menu do
+  botão direito da bandeja.
+- No Windows, o ícone da barra de tarefas mostra as mensagens não lidas (`99+`
+  acima de 99). Durante uma chamada, os ícones da janela e da bandeja mostram um
+  telefone com o microfone ativado ou desativado. Ao sair, volta o ícone normal.
 - Um processo principal Electron gerencia janela, sessão e permissões.
 - O site roda com sandbox, isolamento de contexto e Node desativado.
 - O preload injeta a barra Windows e o modal de compartilhamento, com IPC limitado.

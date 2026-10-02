@@ -70,7 +70,12 @@ test('real desktop loads local recovery, retains controls and returns to its rou
     ).toBeVisible();
     if (process.platform === 'win32') {
       await page.getByRole('button', { name: 'Fechar', exact: true }).click();
-      await expect.poll(() => page.isClosed()).toBe(true);
+      await expect
+        .poll(() =>
+          client.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()),
+        )
+        .toBe(false);
+      expect(page.isClosed()).toBe(false);
     }
   } finally {
     // The Windows Electron launcher can keep its shell alive after window close.

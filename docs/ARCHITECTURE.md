@@ -18,6 +18,7 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | --- | --- |
 | electron/main.cjs | Uma janela, sessão persistente, links externos e controles |
 | electron/window/window-controls.cjs | Comandos IPC da janela com validação de remetente |
+| electron/window/desktop-presence.cjs, status-icons.cjs | Bandeja, fechar para ocultar, contador Windows e indicadores de chamada/microfone; IPC com estado e origem validados |
 | electron/update/window.cjs, preload.cjs, ui/ | Janela local isolada; IPC exclusivo para atualização |
 | electron/update/policy.cjs, network.cjs, updater.cjs | HTTPS restrito, assinatura, download, verificação e abertura do instalador |
 | electron/update/trusted-keys.json | Chaves públicas de atualização fixadas no cliente |
@@ -31,7 +32,7 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | customizations/audio/audio.js | Ponte PCM sem expor o evento IPC ao site |
 | customizations/capture/capture-modal.* | Modal, miniaturas e escolha de áudio |
 | customizations/titlebar/desktop.js, titlebar.css | Barra Windows em shadow DOM |
-| renderer/ | Adaptador e worklet usados pela página de chamadas |
+| renderer/ | Adaptadores de áudio e indicadores desktop, e worklet usados pela página |
 | scripts/build.mjs | Incorpora fontes locais ao preload, sem baixar a plataforma |
 | electron-builder.cjs | Lista explícita do conteúdo distribuído e dependências |
 | .github/workflows/build.yml | Builds por sistema e publicação de tags |

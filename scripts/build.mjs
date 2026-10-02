@@ -27,7 +27,8 @@ if (process.isMainFrame && originArg) {
     ipcRenderer.on('cuescord:capture:open', () => { captureQuality = undefined; });
     ipcRenderer.on('cuescord:capture:quality', (_event, quality) => { captureQuality = quality; });
     const screenShare = { takeQuality: () => { const quality = captureQuality; captureQuality = undefined; return quality; } };
-    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', screenShare, screenAudio: (${audioBridge})(ipcRenderer) });
+    const presence = { update: state => ipcRenderer.invoke('cuescord:desktop:presence', { unreadCount: state.unreadCount, inCall: state.inCall, microphoneMuted: state.microphoneMuted }) };
+    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', presence, screenShare, screenAudio: (${audioBridge})(ipcRenderer) });
     const controls = {
       setImageAnimationPolicy: policy => ipcRenderer.invoke('cuescord:window', policy === 'noAnimation' ? 'pause-image-animations' : 'resume-image-animations'),
       minimize: () => ipcRenderer.invoke('cuescord:window', 'minimize'),

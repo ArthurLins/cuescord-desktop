@@ -1,4 +1,5 @@
 const { installWindowControls } = require('./window/window-controls.cjs');
+const { installDesktopPresence } = require('./window/desktop-presence.cjs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { installPageRecovery } = require('./recovery/recovery.cjs');
@@ -11,6 +12,8 @@ const {
   shell,
   systemPreferences,
   desktopCapturer,
+  Tray,
+  nativeImage,
 } = require('electron');
 const { PRODUCTION_URL, appUrl, sameOrigin, externalUrl } = require('./security/policy.cjs');
 const { installPermissions } = require('./security/permissions.cjs');
@@ -25,6 +28,7 @@ const trustedUrl = appUrl(
   !app.isPackaged,
 );
 let mainWindow;
+let desktopPresence;
 const recoveryUrl = pathToFileURL(path.join(__dirname, 'recovery/ui/index.html')).href;
 
 function openExternal(url) {
@@ -60,6 +64,7 @@ function createWindow(appSession) {
     },
   });
   mainWindow = win;
+  desktopPresence.attach(win);
   const recovery = installPageRecovery({ window: win, trustedUrl, recoveryUrl });
   win.on('page-title-updated', (event) => event.preventDefault());
   win.webContents.on('will-attach-webview', (event) => event.preventDefault());
@@ -111,6 +116,17 @@ else {
       const appSession = session.fromPartition('persist:cuescord');
       const ownsContents = (contents) =>
         mainWindow && !mainWindow.isDestroyed() && contents === mainWindow.webContents;
+      desktopPresence = installDesktopPresence({
+        app,
+        Tray,
+        Menu,
+        nativeImage,
+        ipcMain,
+        getWindow: () => mainWindow,
+        ownsContents,
+        trustedUrl,
+        iconPath: path.join(__dirname, '../assets/icons/128x128@2x.png'),
+      });
       installPermissions(appSession, trustedUrl, ownsContents, systemPreferences);
       // Local utility windows have no reason to access devices or privileged web APIs.
       session.defaultSession.setPermissionCheckHandler(() => false);
@@ -155,6 +171,7 @@ else {
       createWindow(appSession);
       app.on('activate', () => {
         if (!mainWindow) createWindow(appSession);
+        else desktopPresence.show();
       });
     })
     .catch((error) => {
