@@ -1,11 +1,19 @@
 const { sameOrigin } = require('../security/policy.cjs');
 
-function installWindowControls({ ipcMain, getWindow, ownsContents, trustedUrl, openUpdates }) {
+function installWindowControls({
+  ipcMain,
+  getWindow,
+  ownsContents,
+  trustedUrl,
+  openUpdates,
+  recoveryUrl,
+}) {
   ipcMain.handle('cuescord:window', (event, action) => {
     if (
       !ownsContents(event.sender) ||
       event.senderFrame !== event.sender.mainFrame ||
-      !sameOrigin(event.senderFrame.url, trustedUrl)
+      (!sameOrigin(event.senderFrame.url, trustedUrl) &&
+        !(typeof recoveryUrl === 'string' && event.senderFrame.url === recoveryUrl))
     ) {
       throw new Error('Janela não autorizada.');
     }

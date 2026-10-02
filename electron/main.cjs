@@ -1,5 +1,7 @@
 const { installWindowControls } = require('./window/window-controls.cjs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { installPageRecovery } = require('./recovery/recovery.cjs');
 const {
   app,
   BrowserWindow,
@@ -23,6 +25,7 @@ const trustedUrl = appUrl(
   !app.isPackaged,
 );
 let mainWindow;
+const recoveryUrl = pathToFileURL(path.join(__dirname, 'recovery/ui/index.html')).href;
 
 function openExternal(url) {
   if (externalUrl(url))
@@ -50,10 +53,14 @@ function createWindow(appSession) {
       webviewTag: false,
       spellcheck: true,
       backgroundThrottling: true,
-      additionalArguments: [`--cuescord-origin=${encodeURIComponent(new URL(trustedUrl).origin)}`],
+      additionalArguments: [
+        `--cuescord-origin=${encodeURIComponent(new URL(trustedUrl).origin)}`,
+        `--cuescord-recovery-url=${encodeURIComponent(recoveryUrl)}`,
+      ],
     },
   });
   mainWindow = win;
+  const recovery = installPageRecovery({ window: win, trustedUrl, recoveryUrl });
   win.on('page-title-updated', (event) => event.preventDefault());
   win.webContents.on('will-attach-webview', (event) => event.preventDefault());
   win.webContents.on('will-navigate', (event, url) => {
@@ -81,16 +88,12 @@ function createWindow(appSession) {
       (((input.control || input.meta) && input.key.toLowerCase() === 'r') || input.key === 'F5')
     ) {
       event.preventDefault();
-      void win
-        .loadURL(
-          sameOrigin(win.webContents.getURL(), trustedUrl) ? win.webContents.getURL() : trustedUrl,
-        )
-        .catch(console.error);
+      void recovery.reload();
     }
   });
   void win.loadURL(trustedUrl).catch((error) => {
     console.error('Falha ao carregar o Cuescord:', error);
-    if (!win.isDestroyed()) win.show();
+    if (error.code !== 'ERR_ABORTED') recovery.failed(trustedUrl);
   });
 }
 
@@ -131,6 +134,7 @@ else {
         ownsContents,
         trustedUrl,
         openUpdates: updates.show,
+        recoveryUrl,
       });
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([

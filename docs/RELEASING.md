@@ -1,5 +1,36 @@
 # Builds, releases e assinatura
 
+## Leitura obrigatória para agentes
+
+Agentes devem ler este documento inteiro, [SECURITY.md](../SECURITY.md) e o
+[workflow](../.github/workflows/build.yml) **a cada pedido** de deploy, release,
+atualização ou rollback, conforme [AGENTS.md](../AGENTS.md). Dentro da plataforma
+Cuescord, leia primeiro o guia geral `../../DEPLOY.md` a partir da raiz do desktop;
+no clone independente, este documento é o procedimento de deployment do cliente.
+
+Antes de publicar, confirme pedido/alvo, remoto, branch, status/diff, versão instalada
+e última release estável. Preserve trabalho local e segredos; publique somente o
+commit final revisado. A versão deve ser estável, maior que a anterior e igual à tag.
+Não envie a plataforma privada ao repositório público. Documentação ou build local
+não são autorização de release. Um pedido explícito de release autoriza suas etapas
+no destino solicitado, sem confirmações repetidas; peça apenas informação necessária
+ausente ou autorização para ação destrutiva/fora do escopo.
+
+Falha em check, build, assinatura ou provenance impede publicar. Não contorne checks,
+troque a chave pública ou remova proteções do sistema para fazer a release passar.
+Não declare sucesso após apenas enviar a tag: acompanhe o run exato, os três builds,
+o job de release e os assets públicos. Verifique assinatura/tamanho/hash com a chave
+pública embutida e faça aceite de instalação/atualização em perfil/VM isolados.
+Relate commit, versão/tag, run/release, checks, aceite e limitações sem segredos.
+
+Uma release pública não pode ter tags/assets substituídos. Para reverter regressão,
+publique versão maior com a correção ou código revertido; o atualizador recusa
+downgrade. Um draft incompleto exige inspeção antes de qualquer remoção/reexecução.
+Se o aceite externo não for possível, registre exatamente a etapa pendente; build
+local, release publicada e atualização validada são resultados distintos.
+
+## Pipeline
+
 O workflow build.yml compila pull requests, pushes em main, tags v* e execução
 manual. A matriz usa Windows x64, Ubuntu x64 e macOS 15 arm64.
 macOS é explicitamente arm64; não há alvo Intel/universal.

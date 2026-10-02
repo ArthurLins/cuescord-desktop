@@ -18,6 +18,7 @@ const { version } = JSON.parse(manifest);
 // and initializer; the remote page never receives Node or an unrestricted IPC API.
 const preload = `const { contextBridge, ipcRenderer } = require('electron');
 const originArg = process.argv.find(arg => arg.startsWith('--cuescord-origin='));
+const recoveryArg = process.argv.find(arg => arg.startsWith('--cuescord-recovery-url='));
 if (process.isMainFrame && originArg) {
   const origin = decodeURIComponent(originArg.slice('--cuescord-origin='.length));
   if (window.location.origin === origin) {
@@ -37,6 +38,16 @@ if (process.isMainFrame && originArg) {
     };
     (${source})({ origin, version: ${JSON.stringify(version)}, platform, css: ${JSON.stringify(css)}, titlebarCss: ${JSON.stringify(titlebarCss)} }, controls);
     (${captureModal})(ipcRenderer, ${JSON.stringify(captureCss)});
+  } else if (recoveryArg && window.location.href === decodeURIComponent(recoveryArg.slice('--cuescord-recovery-url='.length))) {
+    const controls = {
+      setImageAnimationPolicy: policy => ipcRenderer.invoke('cuescord:window', policy === 'noAnimation' ? 'pause-image-animations' : 'resume-image-animations'),
+      minimize: () => ipcRenderer.invoke('cuescord:window', 'minimize'),
+      toggleMaximize: () => ipcRenderer.invoke('cuescord:window', 'toggle-maximize'),
+      isMaximized: () => ipcRenderer.invoke('cuescord:window', 'is-maximized'),
+      close: () => ipcRenderer.invoke('cuescord:window', 'close'),
+      updates: () => ipcRenderer.invoke('cuescord:window', 'updates'),
+    };
+    (${source})({ origin: window.location.origin, version: ${JSON.stringify(version)}, platform: { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform], css: ${JSON.stringify(css)}, titlebarCss: ${JSON.stringify(titlebarCss)} }, controls);
   }
 }
 `;

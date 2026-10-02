@@ -1,0 +1,52 @@
+:root {
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #1a1a1e;
+  color: #f2f3f5;
+  font-family: 'Segoe UI', sans-serif;
+}
+main {
+  min-height: calc(100dvh - var(--desktop-titlebar-height, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px;
+  text-align: center;
+}
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #94959c;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #5865f233;
+  border-top-color: #5865f2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

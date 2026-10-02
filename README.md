@@ -13,6 +13,9 @@ do cliente. Publicar o cliente não torna a plataforma inteira open source.
 
 ## Downloads
 
+Para preparar ou publicar uma versão, leia o [guia de deployment](docs/RELEASING.md).
+Agentes devem reler o procedimento a cada solicitação, conforme [AGENTS.md](AGENTS.md).
+
 Baixe em [Releases](https://github.com/ArthurLins/cuescord-desktop/releases).
 Cada release inclui os instaladores, hashes SHA-256 e informações do build
 (commit, runtime e execução do GitHub Actions).

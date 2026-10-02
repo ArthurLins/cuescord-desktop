@@ -18,6 +18,12 @@ Não é iniciado áudio/câmera apenas por conceder permissão. Compartilhamento
 gesto do usuário e escolha explícita; concessões de áudio expiram sem uso e são
 revogadas em navegação, encerramento ou saída.
 
+Se a página remota não carregar, o cliente abre o documento local exato
+`electron/recovery/ui/index.html` e verifica a disponibilidade do servidor antes
+de retornar à última URL permitida. Essa página usa sandbox e CSP restritiva e
+recebe apenas os controles de janela. Não recebe Node.js nem a ponte de captura
+de áudio ou tela. Outros arquivos locais e subframes não podem usar esses controles.
+
 ## Rede e dados locais
 
 - O site usa a rede para login, conteúdo e chamadas; destinos de mídia são
