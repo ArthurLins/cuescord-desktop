@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile, symlink } from 'node:fs/prom
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fixture, bytes } from './update-fixture.mjs';
+import { fixture, zipFixture, bytes } from './update-fixture.mjs';
 const require = createRequire(import.meta.url);
 const { DesktopUpdater, markDownloadedFile } = require('../electron/update/updater.cjs');
 
@@ -24,10 +24,10 @@ async function setup(t, overrides = {}, data = fixture()) {
       kind === 'api'
         ? { draft: false, prerelease: false, tag_name: `v${data.manifest.version}` }
         : data.envelope,
-    downloadVerified: async (_url, _artifact, file, _signal, progress) => {
+    downloadVerified: async (_url, artifact, file, _signal, progress) => {
       calls.push('download');
       progress(50);
-      await writeFile(file, bytes);
+      await writeFile(file, data.files?.get(artifact.file) || bytes);
     },
     markFile: async () => calls.push('mark'),
     confirmInstall: async () => {
@@ -210,5 +210,86 @@ test(
     );
     assert.match(await readFile(`${file}:Zone.Identifier`, 'utf8'), /ZoneId=3/);
     assert.deepEqual(await readFile(file), bytes);
+  },
+);
+
+for (const [platform, arch] of [
+  ['win32', 'x64'],
+  ['linux', 'x64'],
+  ['darwin', 'arm64'],
+])
+  test(`ZIP ${platform}: downloads the archive and opens only its verified installer`, async (t) => {
+    const data = await zipFixture();
+    const { updater, calls } = await setup(t, { platform, arch }, data);
+    const download = updater.downloadVerified;
+    updater.downloadVerified = async (url, artifact, ...args) => {
+      assert.ok(url.endsWith('.zip'));
+      assert.ok(artifact.file.endsWith('.zip'));
+      return download(url, artifact, ...args);
+    };
+    const selected = data.manifest.artifacts.find((a) => a.platform === platform);
+    assert.equal((await updater.check()).size, selected.archive.size);
+    assert.equal((await updater.download()).status, 'ready');
+    assert.ok(updater.ready.file.endsWith(selected.file));
+    assert.equal((await updater.install()).status, 'opened');
+    assert.deepEqual(calls, ['download', 'mark', 'mark', 'confirm', 'open', 'installed']);
+  });
+
+test('ZIP tampering is rejected with no direct-installer fallback or leftover files', async (t) => {
+  const data = await zipFixture();
+  const { updater, calls } = await setup(t, {}, data);
+  updater.downloadVerified = async (_url, artifact, file) => {
+    calls.push('download');
+    const zip = Buffer.from(data.files.get(artifact.file));
+    zip[40] ^= 1;
+    await writeFile(file, zip);
+  };
+  await updater.check();
+  assert.equal((await updater.download()).status, 'error');
+  assert.deepEqual(calls, ['download']);
+  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+});
+
+test('ZIP or extracted installer modified after downloading is rejected before opening', async (t) => {
+  for (const field of ['archive', 'file']) {
+    const { updater, calls } = await setup(t, {}, await zipFixture());
+    await updater.check();
+    assert.equal((await updater.download()).status, 'ready');
+    await writeFile(updater.ready[field], 'tampered');
+    assert.equal((await updater.install()).status, 'error');
+    assert.equal(calls.includes('open'), false);
+    assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  }
+});
+
+test('ZIP download cancellation removes the archive and allows retry', async (t) => {
+  const { updater } = await setup(t, {}, await zipFixture());
+  const download = updater.downloadVerified;
+  updater.downloadVerified = async (...args) => {
+    await download(...args);
+    updater.cancel();
+  };
+  await updater.check();
+  assert.equal((await updater.download()).status, 'idle');
+  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  updater.downloadVerified = download;
+  assert.equal((await updater.download()).status, 'ready');
+});
+
+test(
+  'ZIP and extracted Windows installer both retain their Internet marks',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const { updater } = await setup(t, { markFile: markDownloadedFile }, await zipFixture());
+    await updater.check();
+    assert.equal((await updater.download()).status, 'ready');
+    for (const file of [updater.ready.archive, updater.ready.file]) {
+      const mark = await readFile(`${file}:Zone.Identifier`, 'utf8');
+      assert.match(mark, /ZoneId=3/);
+      assert.match(
+        mark,
+        /HostUrl=https:\/\/github.com\/ArthurLins\/cuescord-desktop\/releases\/download\/v0.5.0\/Cuescord-0.5.0-win-x64.zip/,
+      );
+    }
   },
 );

@@ -17,22 +17,27 @@ Para preparar ou publicar uma versão, leia o [guia de deployment](docs/RELEASIN
 Agentes devem reler o procedimento a cada solicitação, conforme [AGENTS.md](AGENTS.md).
 
 Baixe em [Releases](https://github.com/ArthurLins/cuescord-desktop/releases).
-Cada release inclui os instaladores, hashes SHA-256 e informações do build
+Cada release inclui ZIPs com os instaladores, hashes SHA-256 e informações do build
 (commit, runtime e execução do GitHub Actions).
 
-| Sistema | Arquitetura | Instalador |
-| --- | --- | --- |
-| Windows | x64 | NSIS `.exe` |
-| Debian/Ubuntu | amd64 | `.deb` |
-| macOS, linha M (Apple Silicon) | arm64 | `.dmg` |
+| Sistema                        | Arquitetura | Instalador               |
+| ------------------------------ | ----------- | ------------------------ |
+| Windows                        | x64         | ZIP contendo NSIS `.exe` |
+| Debian/Ubuntu                  | amd64       | ZIP contendo `.deb`      |
+| macOS, linha M (Apple Silicon) | arm64       | ZIP contendo `.dmg`      |
+
+Para instalar manualmente, extraia o ZIP e abra o instalador pelo sistema.
+Instaladores diretos permanecem disponíveis para clientes antigos atualizarem.
 
 Não geramos macOS Intel/x86 ou universal. A partir da versão 0.4.0, use o botão
 **Atualizações do Cuescord** na barra Windows ou **Ajuda → Atualizações do Cuescord**.
-O cliente verifica a release, baixa o instalador com progresso/cancelamento e exige
-assinatura Ed25519 e hash SHA-512 válidos antes de permitir instalar.
+Desde 0.4.3, o cliente verifica a release, baixa o ZIP com progresso/cancelamento,
+extrai o instalador automaticamente e exige assinatura Ed25519 e hashes SHA-512
+válidos tanto do ZIP quanto do instalador antes de permitir instalar.
+Clientes 0.4.0–0.4.2 continuam atualizando pelo instalador direto.
 Na ausência de certificados, Windows fica sem assinatura de publicador e macOS
 usa assinatura ad-hoc, sem notarização; o sistema pode bloquear a primeira
-abertura. Consulte [distribuição e assinatura](docs/RELEASING.md).
+abertura. ZIP não garante eliminar esses avisos. Consulte [distribuição e assinatura](docs/RELEASING.md).
 
 No Debian: `sudo apt install ./Cuescord-0.4.0-linux-amd64.deb`.
 O APT resolve as dependências declaradas pelo pacote. Não são necessários Rust,

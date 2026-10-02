@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3
+
+- Releases incluem um ZIP por sistema contendo o instalador Windows, Linux ou macOS; clientes atualizados passam a baixar e extrair o ZIP pelo próprio aplicativo.
+- Manifesto Ed25519 autentica separadamente o ZIP e o instalador interno, com SHA-512, limites de tamanho, extração restrita e nova verificação antes da instalação.
+- Instaladores diretos continuam publicados para que clientes anteriores possam atualizar, inclusive ao pular versões; assinatura, proteção contra downgrade, confirmação nativa e marcas de Internet/quarentena são preservadas.
+- ZIP não substitui assinatura de publicador nem garante remover avisos do SmartScreen/Gatekeeper.
+
 ## 0.4.2
 
 - Fechar a janela mantém o aplicativo na bandeja, preservando chamadas e mensagens; o menu da bandeja permite reabrir ou encerrar o cliente.

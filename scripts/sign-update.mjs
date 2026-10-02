@@ -1,17 +1,35 @@
 import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { lstat, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import policy from '../electron/update/policy.cjs';
+import archive from '../electron/update/archive.cjs';
 
-const { REPOSITORY, SIGNING_CONTEXT, installerName, publicKeyId, verifyManifest } = policy;
+const { REPOSITORY, SIGNING_CONTEXT, installerName, archiveName, publicKeyId, verifyManifest } =
+  policy;
 const root = fileURLToPath(new URL('../', import.meta.url));
 const targets = [
   ['win32', 'x64'],
   ['linux', 'x64'],
   ['darwin', 'arm64'],
 ];
+
+async function fileMetadata(directory, file, expectedHash) {
+  const location = path.join(directory, file);
+  const entry = await lstat(location);
+  if (!entry.isFile() || entry.isSymbolicLink()) throw new Error('Invalid release file');
+  const sha512 = createHash('sha512'),
+    sha256 = createHash('sha256');
+  for await (const chunk of createReadStream(location)) {
+    sha512.update(chunk);
+    sha256.update(chunk);
+  }
+  if (sha256.digest('hex') !== expectedHash)
+    throw new Error('Release file differs from build provenance');
+  return { file, size: entry.size, sha512: sha512.digest('hex') };
+}
 
 export async function signUpdate({ directory, version, tag, commit, privateKey, keys }) {
   if (tag !== `v${version}`) throw new Error('Release tag must match package.json');
@@ -38,21 +56,30 @@ export async function signUpdate({ directory, version, tag, commit, privateKey, 
       info.platform !== platform ||
       info.architecture !== arch ||
       info.installer !== file ||
+      info.archive?.file !== archiveName(version, platform, arch) ||
+      info.archive.format !== 'zip-store-v1' ||
       (commit && info.commit !== commit)
     )
       throw new Error('Installer provenance does not match this release');
-    const location = path.join(directory, file);
-    const entry = await lstat(location);
-    if (!entry.isFile() || entry.isSymbolicLink()) throw new Error('Invalid installer file');
-    const sha512 = createHash('sha512'),
-      sha256 = createHash('sha256');
-    for await (const chunk of createReadStream(location)) {
-      sha512.update(chunk);
-      sha256.update(chunk);
+    const artifact = { platform, arch, ...(await fileMetadata(directory, file, info.sha256)) };
+    artifact.archive = {
+      format: 'zip-store-v1',
+      ...(await fileMetadata(directory, info.archive.file, info.archive.sha256)),
+    };
+    // Validate the inner bytes and structure before signing either download.
+    const temporary = await mkdtemp(path.join(tmpdir(), 'cuescord-sign-zip-'));
+    const extracted = path.join(temporary, file);
+    try {
+      await archive.extractInstallerZip(
+        path.join(directory, artifact.archive.file),
+        extracted,
+        artifact,
+      );
+    } finally {
+      await unlink(extracted).catch(() => {});
+      await rmdir(temporary);
     }
-    if (sha256.digest('hex') !== info.sha256)
-      throw new Error('Installer differs from build provenance');
-    artifacts.push({ platform, arch, file, size: entry.size, sha512: sha512.digest('hex') });
+    artifacts.push(artifact);
   }
   const payload = Buffer.from(
     JSON.stringify({ schema: 1, repository: REPOSITORY, version, artifacts }),

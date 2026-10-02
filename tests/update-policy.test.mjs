@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fixture, policy } from './update-fixture.mjs';
+import { createRequire } from 'node:module';
+import { fixture, zipFixture, policy } from './update-fixture.mjs';
+const require = createRequire(import.meta.url);
+const legacyPolicy = require('./fixtures/update-policy-v1.cjs');
 
 test('signed manifest selects only this platform and a strictly newer version', () => {
   const data = fixture();
@@ -107,4 +110,52 @@ test('network policy rejects arbitrary origins, HTTP, credentials, ports and API
   ])
     assert.throws(() => policy.validateNetworkUrl(url, 'asset'));
   assert.throws(() => policy.validateNetworkUrl('https://github.com/', 'api'));
+});
+
+test('pre-ZIP clients accept the same signed envelope and retain the direct installer URL', async () => {
+  const data = await zipFixture();
+  const manifest = legacyPolicy.verifyManifest(data.envelope, data.keys);
+  for (const artifact of manifest.artifacts) {
+    const selected = legacyPolicy.selectArtifact(
+      manifest,
+      '0.4.2',
+      '0.4.2',
+      artifact.platform,
+      artifact.arch,
+    );
+    assert.equal(selected.file, artifact.file);
+    assert.ok(!legacyPolicy.releaseUrl(manifest.version, selected.file).endsWith('.zip'));
+  }
+});
+
+test('signed ZIP metadata must bind the exact platform name, format, bounded size and hash', async () => {
+  const data = await zipFixture();
+  assert.deepEqual(policy.verifyManifest(data.envelope, data.keys), data.manifest);
+  for (const edit of [
+    (a) => {
+      a.file = '../evil.zip';
+    },
+    (a) => {
+      a.file = data.manifest.artifacts[1].archive.file;
+    },
+    (a) => {
+      a.format = 'tar';
+    },
+    (a) => {
+      a.size = policy.MAX_ARCHIVE_SIZE + 1;
+    },
+    (a) => {
+      a.size -= 1;
+    },
+    (a) => {
+      a.sha512 = 'bad';
+    },
+  ]) {
+    const manifest = structuredClone(data.manifest);
+    edit(manifest.artifacts[0].archive);
+    assert.throws(() => policy.verifyManifest(data.signed(manifest), data.keys));
+  }
+  const manifest = structuredClone(data.manifest);
+  manifest.artifacts[0].archive = null;
+  assert.throws(() => policy.verifyManifest(data.signed(manifest), data.keys));
 });

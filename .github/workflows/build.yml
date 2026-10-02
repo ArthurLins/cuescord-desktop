@@ -66,7 +66,7 @@ jobs:
           APPLE_ID: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_TEAM_ID || '' }}
-      - name: Collect installer and provenance
+      - name: Package installer ZIP, legacy installer and provenance
         run: node scripts/artifacts.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -107,11 +107,14 @@ jobs:
           cat > notes.md <<'EOF'
           Instaladores gerados pelo GitHub Actions a partir desta tag pública.
 
-          - Windows x64 (.exe)
-          - Debian/Ubuntu amd64 (.deb)
-          - macOS Apple Silicon arm64 (.dmg); sem versão Intel
+          - Windows x64: ZIP contendo o instalador .exe
+          - Debian/Ubuntu amd64: ZIP contendo o pacote .deb
+          - macOS Apple Silicon arm64: ZIP contendo o .dmg; sem versão Intel
 
-          update-manifest.json autentica os instaladores com a chave pública embutida no cliente.
+          Para instalar manualmente, extraia o ZIP e abra o instalador pelo sistema.
+          Instaladores diretos também são publicados para compatibilidade com clientes antigos.
+
+          update-manifest.json autentica os ZIPs e os instaladores com a chave pública embutida no cliente.
           Consulte os arquivos build-info e sha256sums para identificar commit, runtime e hashes.
           Assinatura de publicador/notarização dependem dos certificados configurados pelo mantenedor.
           Sem certificados, Windows não tem assinatura de publicador e macOS usa assinatura ad-hoc.

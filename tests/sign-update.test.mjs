@@ -5,14 +5,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { signUpdate } from '../scripts/sign-update.mjs';
-import { fixture, bytes, policy } from './update-fixture.mjs';
+import { zipFixture, bytes, policy } from './update-fixture.mjs';
 
 test('release signer binds all three installers to version, commit and trusted public key', async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'cuescord-signer-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const data = fixture();
+  const data = await zipFixture();
   for (const artifact of data.manifest.artifacts) {
     await writeFile(path.join(directory, artifact.file), bytes);
+    await writeFile(
+      path.join(directory, artifact.archive.file),
+      data.files.get(artifact.archive.file),
+    );
     await writeFile(
       path.join(directory, `build-info-${artifact.platform}-${artifact.arch}.json`),
       JSON.stringify({
@@ -22,6 +26,11 @@ test('release signer binds all three installers to version, commit and trusted p
         installer: artifact.file,
         commit: 'expected',
         sha256: createHash('sha256').update(bytes).digest('hex'),
+        archive: {
+          format: 'zip-store-v1',
+          file: artifact.archive.file,
+          sha256: createHash('sha256').update(data.files.get(artifact.archive.file)).digest('hex'),
+        },
       }),
     );
   }
@@ -35,7 +44,10 @@ test('release signer binds all three installers to version, commit and trusted p
   };
   assert.deepEqual(policy.verifyManifest(await signUpdate(options), data.keys), data.manifest);
   await assert.rejects(signUpdate({ ...options, privateKey: '' }), /UPDATE_SIGNING_PRIVATE_KEY/);
-  await assert.rejects(signUpdate({ ...options, keys: fixture().keys }), /does not match/);
+  await assert.rejects(
+    signUpdate({ ...options, keys: (await zipFixture()).keys }),
+    /does not match/,
+  );
   await assert.rejects(signUpdate({ ...options, tag: 'v0.6.0' }), /tag/);
   await assert.rejects(signUpdate({ ...options, commit: 'wrong' }), /provenance/);
   await writeFile(path.join(directory, data.manifest.artifacts[0].file), 'tampered');

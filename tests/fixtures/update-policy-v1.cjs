@@ -1,10 +1,10 @@
+// Frozen pre-ZIP policy from desktop 0.4.2 (eb1766b), for protocol compatibility checks.
 const { createPublicKey, createHash, verify } = require('node:crypto');
 
 const REPOSITORY = 'ArthurLins/cuescord-desktop';
 const API_URL = `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
 const SIGNING_CONTEXT = Buffer.from('Cuescord desktop updates v1\n');
 const MAX_INSTALLER_SIZE = 1024 * 1024 * 1024;
-const MAX_ARCHIVE_SIZE = MAX_INSTALLER_SIZE + 4096;
 const targets = {
   'win32-x64': 'win-x64.exe',
   'linux-x64': 'linux-amd64.deb',
@@ -34,21 +34,6 @@ function installerName(version, platform, arch) {
   const target = targets[`${platform}-${arch}`];
   if (!target) throw new Error('Atualização indisponível para este sistema.');
   return `Cuescord-${version}-${target}`;
-}
-
-function archiveName(version, platform, arch) {
-  return installerName(version, platform, arch).replace(/\.[^.]+$/, '.zip');
-}
-
-function validFileMetadata(artifact, limit) {
-  return (
-    artifact &&
-    Number.isSafeInteger(artifact.size) &&
-    artifact.size > 0 &&
-    artifact.size <= limit &&
-    typeof artifact.sha512 === 'string' &&
-    /^[a-f0-9]{128}$/.test(artifact.sha512)
-  );
 }
 
 function publicKeyId(key) {
@@ -99,13 +84,12 @@ function verifyManifest(envelope, trustedKeys) {
     if (
       platforms.has(target) ||
       artifact.file !== installerName(manifest.version, artifact.platform, artifact.arch) ||
-      !validFileMetadata(artifact, MAX_INSTALLER_SIZE) ||
-      (artifact.archive !== undefined &&
-        (artifact.archive?.format !== 'zip-store-v1' ||
-          artifact.archive.file !==
-            archiveName(manifest.version, artifact.platform, artifact.arch) ||
-          !validFileMetadata(artifact.archive, MAX_ARCHIVE_SIZE) ||
-          artifact.archive.size !== artifact.size + 98 + 2 * Buffer.byteLength(artifact.file)))
+      !Number.isSafeInteger(artifact.size) ||
+      artifact.size <= 0 ||
+      artifact.size > MAX_INSTALLER_SIZE ||
+      typeof artifact.sha512 !== 'string' ||
+      artifact.sha512.length !== 128 ||
+      !/^[a-f0-9]{128}$/.test(artifact.sha512)
     )
       throw new Error('Arquivo de atualização inválido.');
     platforms.add(target);
@@ -156,10 +140,8 @@ module.exports = {
   API_URL,
   SIGNING_CONTEXT,
   MAX_INSTALLER_SIZE,
-  MAX_ARCHIVE_SIZE,
   compareVersions,
   installerName,
-  archiveName,
   publicKeyId,
   verifyManifest,
   selectArtifact,

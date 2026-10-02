@@ -58,8 +58,19 @@ ArthurLins/cuescord-desktop via HTTPS, sem cookies ou tokens. Downloads seguem a
 redirecionamentos HTTPS para os hosts de assets do GitHub explicitamente permitidos.
 O manifesto exige uma assinatura Ed25519 da chave pública embutida no cliente;
 os bytes assinados incluem versão, plataforma, arquitetura, nome, tamanho e SHA-512.
+Nas releases com ZIP, esses bytes autenticam separadamente o arquivo ZIP e o
+instalador interno. O cliente verifica o ZIP no disco antes da extração e aceita
+somente o perfil `zip-store-v1`: uma entrada regular na raiz, com nome exato do
+instalador, sem compressão, caminhos, links, arquivos adicionais, criptografia,
+ZIP64, comentários ou campos extras. Os instaladores já são comprimidos; STORE
+evita expansão de conteúdo durante a extração. Cabeçalhos, tamanho, CRC32 e
+SHA-512 interno precisam corresponder; o destino é definido pelo cliente e
+criado exclusivamente, nunca por um caminho fornecido pelo ZIP.
 O download tem limites de tamanho, tempo e redirecionamentos. Arquivos parciais
-são removidos; o arquivo final é verificado novamente antes de abrir o instalador.
+são removidos, inclusive se a extração falhar ou for cancelada; ZIP e instalador
+extraído são verificados novamente antes de abrir o instalador. Falha no ZIP não
+provoca fallback para o instalador direto. Manifestos antigos assinados sem ZIP
+continuam aceitos, sujeitos às mesmas regras de versão e integridade.
 
 Versões menores ou iguais à instalada não são instaladas. O cliente guarda o
 manifesto assinado da maior versão conhecida em userData/updates e recusa releases
@@ -71,7 +82,9 @@ dessa proteção; assinatura não comprova ausência de bugs na nova versão.
 
 A instalação exige ação na janela local e confirmação nativa com cancelamento
 como padrão. Windows conserva a marca de download da Internet; macOS conserva
-a quarentena. A assinatura do manifesto não substitui certificados de publicador,
+a quarentena, tanto no ZIP quanto no instalador extraído. Distribuir em ZIP não
+garante eliminar alertas ou bloqueios do sistema operacional.
+A assinatura do manifesto não substitui certificados de publicador,
 SmartScreen ou Gatekeeper. Não se executa instalador silencioso nem comando
 fornecido pelo site. Linux/macOS usam a instalação normal de .deb/.dmg.
 

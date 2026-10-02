@@ -6,6 +6,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const network = require('./network.cjs');
+const { extractInstallerZip } = require('./archive.cjs');
 const {
   API_URL,
   compareVersions,
@@ -46,6 +47,14 @@ async function markDownloadedFile(file, url, platform) {
       ],
       { timeout: 10000 },
     );
+}
+
+async function cleanup(directory, files) {
+  for (const file of new Set(files.filter(Boolean))) {
+    await fs.unlink(`${file}:Zone.Identifier`).catch(() => {});
+    await fs.unlink(file).catch(() => {});
+  }
+  if (directory) await fs.rmdir(directory).catch(() => {});
 }
 
 class DesktopUpdater extends EventEmitter {
@@ -158,7 +167,10 @@ class DesktopUpdater extends EventEmitter {
       await this.remember(envelope);
       operation.signal.throwIfAborted();
       this.available = { envelope, artifact, version };
-      return this.publish('available', { availableVersion: version, size: artifact.size });
+      return this.publish('available', {
+        availableVersion: version,
+        size: (artifact.archive || artifact).size,
+      });
     } catch (error) {
       return this.failure(error, operation.signal);
     } finally {
@@ -173,7 +185,7 @@ class DesktopUpdater extends EventEmitter {
     this.busy = true;
     const operation = (this.operation = new AbortController());
     const timer = setTimeout(() => operation.abort(), 15 * 60000);
-    let directory, file;
+    let directory, file, archive;
     const { envelope, version } = this.available;
     this.publish('downloading', { availableVersion: version, progress: 0 });
     try {
@@ -187,24 +199,29 @@ class DesktopUpdater extends EventEmitter {
       );
       directory = await fs.mkdtemp(path.join(this.cacheRoot, 'download-'));
       file = path.join(directory, artifact.file);
-      const url = releaseUrl(version, artifact.file);
+      const download = artifact.archive || artifact;
+      const destination = artifact.archive ? (archive = path.join(directory, download.file)) : file;
+      const url = releaseUrl(version, download.file);
       let previous = -1;
-      await this.downloadVerified(url, artifact, file, operation.signal, (progress) => {
+      await this.downloadVerified(url, download, destination, operation.signal, (progress) => {
         if (progress !== previous) {
           previous = progress;
           this.publish('downloading', { availableVersion: version, progress });
         }
       });
       // Re-read disk even when the network helper has already verified its stream.
+      await verifyFile(destination, download);
+      await this.markFile(destination, url, this.platform);
+      if (archive) {
+        await extractInstallerZip(archive, file, artifact, operation.signal);
+        await this.markFile(file, url, this.platform);
+      }
       await verifyFile(file, artifact);
-      await this.markFile(file, url, this.platform);
       operation.signal.throwIfAborted();
-      this.ready = { file, directory, envelope, artifact, version };
+      this.ready = { file, archive, directory, envelope, artifact, version };
       return this.publish('ready', { availableVersion: version, progress: 100 });
     } catch (error) {
-      if (file) await fs.unlink(`${file}:Zone.Identifier`).catch(() => {});
-      if (file) await fs.unlink(file).catch(() => {});
-      if (directory) await fs.rmdir(directory).catch(() => {});
+      await cleanup(directory, [file, archive]);
       return this.failure(error, operation.signal);
     } finally {
       clearTimeout(timer);
@@ -237,6 +254,7 @@ class DesktopUpdater extends EventEmitter {
         this.platform,
         this.arch,
       );
+      if (artifact.archive) await verifyFile(ready.archive, artifact.archive);
       await verifyFile(ready.file, artifact);
       if (!canInstall()) throw new Error('A janela de atualização foi encerrada.');
       const result = await this.openInstaller(ready.file);
@@ -247,9 +265,7 @@ class DesktopUpdater extends EventEmitter {
       return this.getState();
     } catch (error) {
       this.ready = undefined;
-      await fs.unlink(`${ready.file}:Zone.Identifier`).catch(() => {});
-      await fs.unlink(ready.file).catch(() => {});
-      await fs.rmdir(ready.directory).catch(() => {});
+      await cleanup(ready.directory, [ready.file, ready.archive]);
       return this.failure(error);
     } finally {
       this.busy = false;
