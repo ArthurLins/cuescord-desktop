@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Tela local de recuperação quando o servidor fica indisponível, com retorno automático à última página após a conexão se estabilizar.
+- Controles de janela disponíveis durante a recuperação, mantendo o isolamento da página local e sem acesso à captura de áudio ou tela.
+- Testes da recuperação no Electron real e documentação do fluxo de publicação e da fronteira de segurança.
+
 ## 0.4.0
 
 - Atualização pelo botão da barra Windows ou pelo menu Ajuda, em janela local isolada.
