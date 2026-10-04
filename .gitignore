@@ -7,6 +7,8 @@
 /playwright-report/
 /.update-signing/
 /.cache/
+/.build/
+/.swiftpm/
 /.pnpm-store/
 *.log
 .DS_Store

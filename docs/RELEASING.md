@@ -44,8 +44,10 @@ o pedido de tela deve abrir o seletor mesmo com câmera/microfone negados,
 permitir cancelamento e recusar subframes. O teste usa fontes sintéticas e um
 perfil isolado; não enumera janelas reais nem concede gravação de tela do host.
 `scripts/build-mac-audio.mjs` compila o helper Swift ScreenCaptureKit para macOS 13+
-com as ferramentas do Xcode, antes de gerar o preload/instalador. Seu self-test
-valida conversão estéreo, preservação de áudio baixo e exclusão do processo pai
+com as ferramentas do Xcode, antes de gerar o preload/instalador. O projeto
+Swift Package Manager de `Package.swift` também é reconhecido pelo autobuild de
+segurança CodeQL e não usa dependências Swift externas. Seu self-test valida
+conversão estéreo, preservação de áudio baixo e exclusão do processo pai
 com áudio sintético; não captura dispositivos nem solicita consentimento TCC.
 O helper é incluído em `Contents/Resources/mac/CuescordAudioCapture`, fora do ASAR,
 e assinado pelo electron-builder. O check do pacote verifica sua assinatura,

@@ -30,7 +30,7 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | electron/audio/audio-worker.cjs | WASAPI e FFI de user32.dll para PID da janela |
 | electron/audio/audio-linux.cjs | pactl, parec, xprop e leitura de /proc/PID/stat |
 | electron/audio/audio-mac.cjs | Protocolo PCM limitado e ciclo do capturador macOS |
-| native/macos/ScreenAudio.swift, process.c | ScreenCaptureKit, conversão PCM e exclusão da árvore do Cuescord |
+| Package.swift, native/macos/ScreenAudio.swift, process/ | ScreenCaptureKit, conversão PCM e exclusão da árvore do Cuescord |
 | customizations/audio/audio.js | Ponte PCM sem expor o evento IPC ao site |
 | customizations/capture/capture-modal.* | Modal, miniaturas e escolha de áudio |
 | customizations/titlebar/desktop.js, titlebar.css | Barra Windows em shadow DOM |

@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreMedia
+import CuescordProcess
 import Foundation
 import ScreenCaptureKit
 
