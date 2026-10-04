@@ -86,6 +86,10 @@ port.on('message', async ({ data: message }) => {
       const capture = require('./audio-linux.cjs').startLinuxAudio(message.config, sendAudio, fail);
       stopCapture = capture.stop;
       await capture.ready;
+    } else if (process.platform === 'darwin') {
+      const capture = require('./audio-mac.cjs').startMacAudio(message.config, sendAudio, fail);
+      stopCapture = capture.stop;
+      await capture.ready;
     } else throw new Error('Captura nativa de áudio indisponível nesta plataforma.');
     if (!stopping) port.postMessage({ type: 'ready' });
   } catch (error) {

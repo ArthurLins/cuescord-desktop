@@ -1,8 +1,19 @@
 const { screenQualities, screenQuality, defaultScreenQuality } = require('./quality.cjs');
 const { randomUUID } = require('node:crypto');
 const { sameOrigin } = require('../security/policy.cjs');
+const { supportsMacAudio } = require('../audio/audio-mac.cjs');
 
-function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedUrl, audio }) {
+function installCapture({
+  session,
+  desktopCapturer,
+  ipcMain,
+  getWindow,
+  trustedUrl,
+  audio,
+  platform = process.platform,
+  macOSRelease = require('node:os').release(),
+}) {
+  const macAudio = supportsMacAudio(platform, macOSRelease);
   let pending;
   function authorized(event, id) {
     try {
@@ -18,7 +29,7 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
     }
   }
   async function audioApps(entry) {
-    if (process.platform !== 'linux') return;
+    if (platform !== 'linux') return;
     try {
       entry.audioApps = await require('../audio/audio-linux.cjs').listAudioApps(process.pid);
     } catch (error) {
@@ -82,7 +93,8 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
       quality,
       kind,
       audioApp,
-      enabled: kind === 'window' || options.audio === true,
+      enabled: (kind === 'window' && platform !== 'darwin') || options.audio === true,
+      displayId: source.display_id || undefined,
     });
   });
   ipcMain.handle('cuescord:capture:cancel', (event, id) => {
@@ -109,7 +121,7 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
       frame,
       valid,
       portal:
-        process.platform === 'linux' &&
+        platform === 'linux' &&
         (process.env.XDG_SESSION_TYPE === 'wayland' || Boolean(process.env.WAYLAND_DISPLAY)),
       finish: null,
     };
@@ -124,15 +136,16 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
       contents.removeListener('render-process-gone', cancel);
       if (!contents.isDestroyed()) contents.send('cuescord:capture:close', entry.id);
       if (source && permitted) {
-        contents.send('cuescord:capture:quality', selection.quality);
+        const audioEnabled = Boolean(
+          request.audioRequested &&
+            selection?.enabled &&
+            (['win32', 'linux'].includes(platform) || macAudio),
+        );
+        contents.send('cuescord:capture:quality', selection.quality, audioEnabled);
         audio.authorize(owner, {
           ...selection,
           sourceId: source.id,
-          enabled: Boolean(
-            request.audioRequested &&
-              selection?.enabled &&
-              ['win32', 'linux'].includes(process.platform),
-          ),
+          enabled: audioEnabled,
         });
       }
       try {
@@ -151,7 +164,8 @@ function installCapture({ session, desktopCapturer, ipcMain, getWindow, trustedU
     contents.once('render-process-gone', cancel);
     contents.send('cuescord:capture:open', {
       id: entry.id,
-      platform: process.platform,
+      platform,
+      macAudio,
       portal: entry.portal,
       qualityProfiles: screenQualities,
       defaultQuality: defaultScreenQuality,

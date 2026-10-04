@@ -43,10 +43,21 @@ O runner macOS também executa `tests/capture-native.spec.ts` no Electron real:
 o pedido de tela deve abrir o seletor mesmo com câmera/microfone negados,
 permitir cancelamento e recusar subframes. O teste usa fontes sintéticas e um
 perfil isolado; não enumera janelas reais nem concede gravação de tela do host.
+`scripts/build-mac-audio.mjs` compila o helper Swift ScreenCaptureKit para macOS 13+
+com as ferramentas do Xcode, antes de gerar o preload/instalador. Seu self-test
+valida conversão estéreo, preservação de áudio baixo e exclusão do processo pai
+com áudio sintético; não captura dispositivos nem solicita consentimento TCC.
+O helper é incluído em `Contents/Resources/mac/CuescordAudioCapture`, fora do ASAR,
+e assinado pelo electron-builder. O check do pacote verifica sua assinatura,
+Hardened Runtime e arquitetura arm64, além de `NSAudioCaptureUsageDescription`.
 No aceite do aplicativo instalado em um Mac de teste, confira a primeira seleção
 de janela/tela, a permissão em **Privacidade e Segurança > Gravação de Tela**
 (ou **Gravação de Tela e Áudio do Sistema**, conforme a versão do macOS), e a
 transmissão para outro participante. O teste do seletor não substitui esse aceite.
+Teste separadamente áudio de janela (somente seu aplicativo) e tela (sistema),
+com outro aplicativo emitindo um tom diferente. Confira que o Cuescord não volta
+para a transmissão, que cancelar/negar a permissão mantém o vídeo sem áudio com
+aviso e que parar a transmissão encerra o helper. Áudio não usa os filtros de voz.
 
 O build macOS mantém Hardened Runtime e assina o aplicativo e seus helpers com
 `assets/entitlements.mac.plist`, incluindo `com.apple.security.device.audio-input`

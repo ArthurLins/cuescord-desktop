@@ -71,6 +71,8 @@ os subprocessos, os acessos ao sistema e a fronteira com o conteúdo remoto.
 
 Requer Git, Node.js **22.23.2** (ou versão compatível >=22.12) e pnpm **10.32.1**.
 O repositório é independente: nenhum acesso ao código privado é necessário.
+No macOS, instale também as ferramentas de linha de comando do Xcode. O build
+compila o capturador Swift localmente e executa seus testes sintéticos.
 
 ```bash
 git clone https://github.com/ArthurLins/cuescord-desktop.git
@@ -116,7 +118,11 @@ do Cuescord para evitar reenviar a chamada. Microfone é um fluxo separado.
   O sistema pode abrir seu próprio seletor; a escolha do aplicativo de áudio é
   explícita, pois o portal não fornece o PID da janela.
 - macOS: vídeo, câmera e microfone dependem das permissões do sistema.
-  **Captura de áudio de aplicativo/tela ainda não está implementada no macOS.**
+  No macOS 13 ou superior, **Compartilhar áudio** permite transmitir o aplicativo
+  da janela escolhida ou o áudio do sistema ao compartilhar uma tela. A opção
+  começa desmarcada; o Cuescord e seus helpers são excluídos da captura.
+  Autorize **Gravação de Tela e Áudio do Sistema** em Privacidade e Segurança
+  quando o macOS solicitar. O áudio não passa pelos filtros do microfone.
 
 O isolamento de áudio é por processo/aplicativo; várias abas/janelas do mesmo
 processo podem compartilhar som. O cliente não consegue isolar uma aba de um

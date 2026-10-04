@@ -43,6 +43,7 @@ function installCaptureModal(ipcRenderer, css) {
         <div class="options">
           <div class="quality-option"><label for="screen-quality">Qualidade da transmissão</label><select id="screen-quality" aria-describedby="quality-help"></select><p id="quality-help">Qualidades maiores usam mais banda. A resolução e os FPS dependem da fonte e da conexão.</p></div>
           <label id="screen-option" hidden><input id="screen-audio" type="checkbox"><span>Compartilhar áudio</span></label>
+          <p id="mac-audio-help" hidden>O áudio da janela inclui o aplicativo correspondente. O áudio da tela inclui o sistema. O Cuescord é excluído.</p>
           <div id="app-option" hidden><label for="audio-app">Áudio da janela</label><div class="app-controls"><select id="audio-app"></select><button id="refresh-audio" class="secondary">Atualizar</button></div></div>
         </div>
         <footer><button id="cancel" class="secondary">Cancelar</button><button id="share" class="primary" disabled>Compartilhar</button></footer>
@@ -94,8 +95,16 @@ function installCaptureModal(ipcRenderer, css) {
     };
     current = entry;
     const updateOptions = () => {
-      root.querySelector('#screen-option').hidden =
-        kind !== 'screen' || !['win32', 'linux'].includes(model.platform);
+      root.querySelector('#screen-option').hidden = !(
+        model.macAudio ||
+        (kind === 'screen' && ['win32', 'linux'].includes(model.platform))
+      );
+      root.querySelector('#screen-option span').textContent = model.macAudio
+        ? kind === 'window'
+          ? 'Compartilhar áudio do aplicativo'
+          : 'Compartilhar áudio do sistema'
+        : 'Compartilhar áudio';
+      root.querySelector('#mac-audio-help').hidden = !model.macAudio;
       root.querySelector('#app-option').hidden =
         model.platform !== 'linux' || kind !== 'window' || !selection;
       qualitySelect.disabled = submitting;
@@ -227,7 +236,7 @@ function installCaptureModal(ipcRenderer, css) {
         await ipcRenderer.invoke('cuescord:capture:select', model.id, selection.id, {
           kind,
           quality: qualitySelect.value,
-          audio: kind === 'screen' && screenAudio.checked,
+          audio: (kind === 'screen' || model.macAudio) && screenAudio.checked,
           audioApp: kind === 'window' ? audioSelect.value : '',
         });
       } catch (error) {

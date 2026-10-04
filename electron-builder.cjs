@@ -70,6 +70,8 @@ module.exports = {
     target: [{ target: 'dmg', arch: ['arm64'] }],
     icon: 'assets/icons/icon.icns',
     category: 'public.app-category.social-networking',
+    extraResources: [{ from: '.cache/mac/CuescordAudioCapture', to: 'mac/CuescordAudioCapture' }],
+    binaries: ['Contents/Resources/mac/CuescordAudioCapture'],
     hardenedRuntime: true,
     entitlements: 'assets/entitlements.mac.plist',
     entitlementsInherit: 'assets/entitlements.mac.plist',
@@ -81,6 +83,8 @@ module.exports = {
     extendInfo: {
       NSMicrophoneUsageDescription: 'O Cuescord usa seu microfone nas chamadas de voz.',
       NSCameraUsageDescription: 'O Cuescord usa sua câmera nas chamadas de vídeo.',
+      NSAudioCaptureUsageDescription:
+        'O Cuescord compartilha o áudio da tela ou do aplicativo escolhido por você.',
     },
   },
 };

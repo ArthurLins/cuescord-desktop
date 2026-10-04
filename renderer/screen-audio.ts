@@ -18,7 +18,10 @@ export function desktopEnvironment() {
       __CUESCORD_DESKTOP__?: {
         engine?: string;
         screenAudio?: AudioBridge;
-        screenShare?: { takeQuality(): DesktopScreenQuality | undefined };
+        screenShare?: {
+          takeQuality(): DesktopScreenQuality | undefined;
+          takeAudioRequested?(): boolean | undefined;
+        };
       };
     }
   ).__CUESCORD_DESKTOP__;

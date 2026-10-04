@@ -49,6 +49,12 @@ de áudio ou tela. Outros arquivos locais e subframes não podem usar esses cont
   `~/Library/Application Support/Cuescord`.
 - O aplicativo não salva gravações de áudio/tela em arquivos por conta própria.
   PCM passa da captura para o renderer e para o fluxo de chamada do site.
+- No macOS 13+, o ScreenCaptureKit captura áudio do aplicativo escolhido ou do
+  sistema, após seleção explícita e consentimento de gravação do macOS. O helper
+  exclui o bundle e a árvore do Cuescord, nunca captura microfone e não grava
+  arquivos. É assinado com Hardened Runtime; só aceita IDs da concessão nativa.
+  O protocolo tem pacotes limitados e é encerrado ao revogar a concessão ou perder
+  o processo pai. Permissão negada não causa fallback para outra fonte.
 - Selecionar arquivos para upload e downloads usam os mecanismos do navegador.
   Links externos HTTP(S) são abertos no navegador padrão.
 - No Linux, o cliente consulta metadados de processos e streams de áudio para

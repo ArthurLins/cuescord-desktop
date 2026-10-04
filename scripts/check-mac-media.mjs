@@ -16,7 +16,11 @@ export async function checkMacMedia(bundle, execute = run) {
     execute('plutil', ['-convert', 'json', '-o', '-', path.join(bundle, 'Contents/Info.plist')])
       .stdout,
   );
-  for (const key of ['NSMicrophoneUsageDescription', 'NSCameraUsageDescription'])
+  for (const key of [
+    'NSMicrophoneUsageDescription',
+    'NSCameraUsageDescription',
+    'NSAudioCaptureUsageDescription',
+  ])
     assert.ok(typeof info[key] === 'string' && info[key].trim(), `Missing ${key} in ${bundle}`);
   const frameworks = path.join(bundle, 'Contents/Frameworks');
   const helpers = (await readdir(frameworks)).filter((name) =>
@@ -33,6 +37,16 @@ export async function checkMacMedia(bundle, execute = run) {
     for (const key of ['com.apple.security.device.audio-input', 'com.apple.security.device.camera'])
       assert.equal(entitlements[key], true, `Missing signed ${key} in ${target}`);
   }
+  const nativeAudio = path.join(bundle, 'Contents/Resources/mac/CuescordAudioCapture');
+  execute('codesign', ['--verify', '--strict', nativeAudio]);
+  const nativeSignature = execute('codesign', ['-dv', '--verbose=4', nativeAudio]);
+  assert.match(
+    nativeSignature.stderr,
+    /flags=.*\bruntime\b/,
+    'Native audio helper lacks Hardened Runtime',
+  );
+  const architecture = execute('lipo', ['-archs', nativeAudio]).stdout.trim();
+  assert.equal(architecture, 'arm64', 'Native audio helper does not match the macOS package');
   return helpers.length + 1;
 }
 

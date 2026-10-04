@@ -124,7 +124,7 @@ jobs:
           Consulte os arquivos build-info e sha256sums para identificar commit, runtime e hashes.
           Assinatura de publicador/notarização dependem dos certificados configurados pelo mantenedor.
           Sem certificados, Windows não tem assinatura de publicador e macOS usa assinatura ad-hoc.
-          A captura de áudio de janela/tela ainda não está implementada no macOS.
+          macOS 13+ permite áudio do aplicativo escolhido ou do sistema, com seleção explícita e permissão de gravação de tela/áudio.
           A interface é carregada do serviço remoto; este repositório contém o cliente desktop.
           EOF
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then

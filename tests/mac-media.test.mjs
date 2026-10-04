@@ -18,7 +18,11 @@ test('macOS app and capture helpers are signed with audio/camera entitlements an
       assert.ok(source.includes(`<key>${key}</key>\n    <true/>`), `${option} lacks ${key}`);
     assert.ok(!source.includes('com.apple.security.get-task-allow'));
   }
-  for (const key of ['NSMicrophoneUsageDescription', 'NSCameraUsageDescription'])
+  for (const key of [
+    'NSMicrophoneUsageDescription',
+    'NSCameraUsageDescription',
+    'NSAudioCaptureUsageDescription',
+  ])
     assert.ok(config.mac.extendInfo[key]?.trim());
 });
 
@@ -34,12 +38,16 @@ test('bundle inspection refuses missing signed permissions, usage text or Harden
     const usage = {
       NSMicrophoneUsageDescription: 'Microphone for calls',
       NSCameraUsageDescription: 'Camera for calls',
+      NSAudioCaptureUsageDescription: 'Audio for screen sharing',
     };
     if (command === 'plutil') {
       if (input) return { stdout: input };
       if (failure === 'usage') delete usage.NSMicrophoneUsageDescription;
+      if (failure === 'system-usage') delete usage.NSAudioCaptureUsageDescription;
       return { stdout: JSON.stringify(usage) };
     }
+    if (command === 'lipo') return { stdout: failure === 'architecture' ? 'x86_64' : 'arm64' };
+    if (args.includes('--verify')) return {};
     if (args.includes('--entitlements'))
       return {
         stdout: JSON.stringify({
@@ -47,9 +55,27 @@ test('bundle inspection refuses missing signed permissions, usage text or Harden
           [camera]: failure !== 'camera',
         }),
       };
-    return { stderr: failure === 'runtime' ? 'flags=0x0(none)' : 'flags=0x10000(runtime)' };
+    return {
+      stderr:
+        failure === 'runtime' ||
+        (failure === 'native-runtime' && target.includes('CuescordAudioCapture'))
+          ? 'flags=0x0(none)'
+          : 'flags=0x10000(runtime)',
+    };
   };
   assert.equal(await checkMacMedia(root, inspect()), 3);
-  for (const failure of ['audio', 'helper', 'camera', 'usage', 'runtime'])
-    await assert.rejects(checkMacMedia(root, inspect(failure)), /Missing|Hardened Runtime/);
+  for (const failure of [
+    'audio',
+    'helper',
+    'camera',
+    'usage',
+    'system-usage',
+    'runtime',
+    'native-runtime',
+    'architecture',
+  ])
+    await assert.rejects(
+      checkMacMedia(root, inspect(failure)),
+      /Missing|Hardened Runtime|Native audio/,
+    );
 });

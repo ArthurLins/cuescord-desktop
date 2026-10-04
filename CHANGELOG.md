@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Adiciona áudio de aplicativo e de tela no macOS 13+, com escolha explícita, ScreenCaptureKit e exclusão do próprio Cuescord.
+- Compila e assina um capturador isolado com PCM estéreo de 48 kHz; testa conversão, preservação de áudio baixo, concessões e encerramento.
+- Expõe a escolha de áudio ao adaptador web para informar quando a captura não foi autorizada ou ficou indisponível.
+
 ## 0.4.5
 
 - Corrige o bloqueio do seletor de compartilhamento no macOS: pedidos de tela do Electron não exigem permissão de câmera ou microfone; mantém validação da origem, frame e seleção explícita da fonte.

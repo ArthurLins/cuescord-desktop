@@ -10,7 +10,7 @@ renderer Chromium (sandbox, sem Node)
 processo principal Electron
         | concessão explícita de captura
 processo auxiliar de áudio
-        | WASAPI (Windows) / pactl + parec + xprop (Linux)
+        | WASAPI (Windows) / pactl + parec + xprop (Linux) / ScreenCaptureKit (macOS)
 PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 ```
 
@@ -29,6 +29,8 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | electron/audio/audio.cjs | Concessão vinculada ao frame e ciclo do utilityProcess |
 | electron/audio/audio-worker.cjs | WASAPI e FFI de user32.dll para PID da janela |
 | electron/audio/audio-linux.cjs | pactl, parec, xprop e leitura de /proc/PID/stat |
+| electron/audio/audio-mac.cjs | Protocolo PCM limitado e ciclo do capturador macOS |
+| native/macos/ScreenAudio.swift, process.c | ScreenCaptureKit, conversão PCM e exclusão da árvore do Cuescord |
 | customizations/audio/audio.js | Ponte PCM sem expor o evento IPC ao site |
 | customizations/capture/capture-modal.* | Modal, miniaturas e escolha de áudio |
 | customizations/titlebar/desktop.js, titlebar.css | Barra Windows em shadow DOM |
@@ -69,5 +71,12 @@ o formato assinado, a cadeia de confiança e o preparo da primeira release.
 O site remoto participa da reprodução/transmissão: auditar apenas o instalador
 não audita a implementação do serviço. Várias janelas do mesmo aplicativo podem
 ter áudio misturado. Wayland tem seleção externa controlada pelo sistema.
-macOS ainda não tem captura de áudio de janela/tela. Os builds automatizados não
-validam hardware, configuração PipeWire ou uma chamada real.
+macOS 13+ usa um helper Swift compilado no build, incluído fora do ASAR e assinado
+com Hardened Runtime. A fonte é resolvida novamente por ID no ScreenCaptureKit;
+uma janela concede somente seu aplicativo. Uma tela concede áudio do sistema,
+excluindo o bundle e descendentes do processo Cuescord. Microfone não é capturado.
+Somente PCM estéreo de 48 kHz passa pelo pipe, com pacotes de até 8192 bytes.
+EOF, stop, perda de origem/frame ou destruição encerram o helper. Não há driver,
+fallback para microfone ou instalação auxiliar de sistema.
+Os builds testam conversão/estéreo/exclusão sem gravar janelas reais; não validam
+consentimento TCC, hardware, configuração PipeWire ou uma chamada real.

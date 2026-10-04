@@ -1,4 +1,5 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import './build-mac-audio.mjs';
 
 const root = new URL('../', import.meta.url);
 const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss] =
@@ -23,10 +24,13 @@ if (process.isMainFrame && originArg) {
   const origin = decodeURIComponent(originArg.slice('--cuescord-origin='.length));
   if (window.location.origin === origin) {
     const platform = { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform];
-    let captureQuality;
-    ipcRenderer.on('cuescord:capture:open', () => { captureQuality = undefined; });
-    ipcRenderer.on('cuescord:capture:quality', (_event, quality) => { captureQuality = quality; });
-    const screenShare = { takeQuality: () => { const quality = captureQuality; captureQuality = undefined; return quality; } };
+    let captureQuality, captureAudio;
+    ipcRenderer.on('cuescord:capture:open', () => { captureQuality = undefined; captureAudio = undefined; });
+    ipcRenderer.on('cuescord:capture:quality', (_event, quality, audio) => { captureQuality = quality; captureAudio = audio; });
+    const screenShare = {
+      takeQuality: () => { const quality = captureQuality; captureQuality = undefined; return quality; },
+      takeAudioRequested: () => { const audio = captureAudio; captureAudio = undefined; return audio; },
+    };
     const presence = { update: state => ipcRenderer.invoke('cuescord:desktop:presence', { unreadCount: state.unreadCount, inCall: state.inCall, microphoneMuted: state.microphoneMuted }) };
     contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', presence, screenShare, screenAudio: (${audioBridge})(ipcRenderer) });
     const controls = {
