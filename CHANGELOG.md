@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Corrige o erro "Object has been destroyed" ao encerrar o aplicativo; interrompe a recuperação e cancela verificações de conexão pendentes sem acessar a janela destruída.
+- Acrescenta testes do encerramento no Electron real, conectado, em recuperação e durante tentativas de reconexão.
+
 ## 0.4.4
 
 - Corrige as permissões assinadas de microfone e câmera no aplicativo e nos helpers macOS, preservando Hardened Runtime.

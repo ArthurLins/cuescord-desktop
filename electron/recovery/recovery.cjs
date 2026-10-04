@@ -20,10 +20,13 @@ function installPageRecovery({
   window,
   trustedUrl,
   recoveryUrl,
-  fetcher = (...args) => window.webContents.session.fetch(...args),
+  fetcher,
   retryMs = 1000,
   random = Math.random,
 }) {
+  // BrowserWindow.webContents cannot be read once the window emits 'closed'.
+  const contents = window.webContents;
+  fetcher ??= (...args) => contents.session.fetch(...args);
   let target = trustedUrl,
     mode = 'remote',
     stopped = false,
@@ -91,17 +94,21 @@ function installPageRecovery({
   const inPage = (_event, url, isMainFrame) => {
     if (isMainFrame && sameOrigin(url, trustedUrl)) target = url;
   };
-  window.webContents.on('did-fail-load', failed);
-  window.webContents.on('did-navigate', navigated);
-  window.webContents.on('did-navigate-in-page', inPage);
+  contents.on('did-fail-load', failed);
+  contents.on('did-navigate', navigated);
+  contents.on('did-navigate-in-page', inPage);
   const dispose = () => {
+    if (stopped) return;
     stopped = true;
     abort.abort();
     clearTimeout(timer);
-    window.webContents.off('did-fail-load', failed);
-    window.webContents.off('did-navigate', navigated);
-    window.webContents.off('did-navigate-in-page', inPage);
+    contents.off('did-fail-load', failed);
+    contents.off('did-navigate', navigated);
+    contents.off('did-navigate-in-page', inPage);
+    contents.off('destroyed', dispose);
+    window.off('closed', dispose);
   };
+  contents.once('destroyed', dispose);
   window.once('closed', dispose);
   return {
     failed: showFallback,
