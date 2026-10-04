@@ -1,5 +1,11 @@
 # Changelog
 
+## Não lançado
+
+- Corrige as permissões assinadas de microfone e câmera no aplicativo e nos helpers macOS, preservando Hardened Runtime.
+- Solicita somente os dispositivos necessários no macOS, reutiliza consentimento concedido e respeita acesso negado pelo sistema.
+- Verifica permissões no bundle macOS após o build; acrescenta testes da autorização e da captura de microfone no Electron real.
+
 ## 0.4.3
 
 - Releases incluem um ZIP por sistema contendo o instalador Windows, Linux ou macOS; clientes atualizados passam a baixar e extrair o ZIP pelo próprio aplicativo.

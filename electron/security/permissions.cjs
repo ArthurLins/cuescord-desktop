@@ -1,4 +1,8 @@
 const { allowPermission, sameOrigin } = require('./policy.cjs');
+const mediaKinds = new Map([
+  ['audio', 'microphone'],
+  ['video', 'camera'],
+]);
 
 function installPermissions(
   session,
@@ -14,7 +18,9 @@ function installPermissions(
       return false;
     if (!allowPermission(permission, origin, details, trustedUrl)) return false;
     if (platform === 'darwin' && permission === 'media') {
-      const kind = details.mediaType === 'video' ? 'camera' : 'microphone';
+      const kind = mediaKinds.get(details.mediaType);
+      // Generic media checks cannot stand in for either device's OS consent.
+      if (!kind) return false;
       return systemPreferences.getMediaAccessStatus(kind) === 'granted';
     }
     return true;
@@ -28,11 +34,21 @@ function installPermissions(
       allowPermission(permission, details.requestingUrl, details, trustedUrl);
     if (!trusted()) return callback(false);
     if (platform !== 'darwin' || permission !== 'media') return callback(true);
-    const kinds = (details.mediaTypes || ['audio', 'video']).map((kind) =>
-      kind === 'audio' ? 'microphone' : 'camera',
-    );
-    Promise.all(kinds.map((kind) => systemPreferences.askForMediaAccess(kind)))
-      .then((results) => callback(trusted() && results.every(Boolean)))
+    const kinds = [...new Set(details.mediaTypes || [])].map((kind) => mediaKinds.get(kind));
+    if (!kinds.length || kinds.some((kind) => !kind)) return callback(false);
+    const authorize = async () => {
+      // Ask only for devices actually requested, and serialize native prompts.
+      for (const kind of kinds) {
+        if (!trusted()) return false;
+        const status = systemPreferences.getMediaAccessStatus(kind);
+        if (status === 'granted') continue;
+        if (status !== 'not-determined' || !(await systemPreferences.askForMediaAccess(kind)))
+          return false;
+      }
+      return trusted();
+    };
+    authorize()
+      .then(callback)
       .catch(() => callback(false));
   });
 }

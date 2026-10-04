@@ -70,6 +70,9 @@ module.exports = {
     target: [{ target: 'dmg', arch: ['arm64'] }],
     icon: 'assets/icons/icon.icns',
     category: 'public.app-category.social-networking',
+    hardenedRuntime: true,
+    entitlements: 'assets/entitlements.mac.plist',
+    entitlementsInherit: 'assets/entitlements.mac.plist',
     // Apple Silicon needs at least an ad-hoc signature. Use Developer ID when supplied.
     identity: process.env.CSC_LINK ? undefined : '-',
     notarize: Boolean(

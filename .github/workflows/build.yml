@@ -66,6 +66,9 @@ jobs:
           APPLE_ID: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(github.ref, 'refs/tags/') && matrix.platform == 'macos' && secrets.APPLE_TEAM_ID || '' }}
+      - name: Verify signed macOS microphone and camera permissions
+        if: matrix.platform == 'macos'
+        run: node scripts/check-mac-media.mjs
       - name: Package installer ZIP, legacy installer and provenance
         run: node scripts/artifacts.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

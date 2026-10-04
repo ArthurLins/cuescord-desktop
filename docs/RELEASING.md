@@ -39,6 +39,16 @@ Cada job instala pnpm 10.32.1 e Node da .nvmrc, instala com frozen-lockfile,
 gera/verifica a sintaxe do preload e empacota. Não precisa acessar o repositório
 da plataforma nem o serviço de produção. As ações são fixadas por commit.
 
+O build macOS mantém Hardened Runtime e assina o aplicativo e seus helpers com
+`assets/entitlements.mac.plist`, incluindo `com.apple.security.device.audio-input`
+e `com.apple.security.device.camera`. As descrições de uso permanecem no Info.plist.
+Após empacotar, `node scripts/check-mac-media.mjs` inspeciona as permissões da
+assinatura real e as descrições; ausência de uma delas impede publicar os artefatos.
+Conceder acesso no Electron não substitui essas permissões na assinatura.
+No aceite macOS, teste a primeira solicitação de microfone em perfil de teste,
+uma chamada sem câmera autorizada e o retorno após conceder acesso em
+**Ajustes do Sistema > Privacidade e Segurança > Microfone** e reiniciar o app.
+
 Após o build nativo, `scripts/artifacts.mjs` gera um ZIP por sistema contendo
 exatamente o instalador na raiz:
 
