@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.6
 
 - Adiciona áudio de aplicativo e de tela no macOS 13+, com escolha explícita, ScreenCaptureKit e exclusão do próprio Cuescord.
 - Compila e assina um capturador isolado com PCM estéreo de 48 kHz; testa conversão, preservação de áudio baixo, concessões e encerramento.
