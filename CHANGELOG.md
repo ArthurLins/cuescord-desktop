@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.5
 
 - Corrige o bloqueio do seletor de compartilhamento no macOS: pedidos de tela do Electron não exigem permissão de câmera ou microfone; mantém validação da origem, frame e seleção explícita da fonte.
 - Corrige o erro "Object has been destroyed" ao encerrar o aplicativo; interrompe a recuperação e cancela verificações de conexão pendentes sem acessar a janela destruída.
