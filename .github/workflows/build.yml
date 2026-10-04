@@ -54,6 +54,9 @@ jobs:
         run: |
           pnpm format:check
           pnpm test
+      - name: Verify macOS screen picker authorization in Electron
+        if: matrix.platform == 'macos'
+        run: pnpm exec playwright test tests/capture-native.spec.ts --workers=1
       - name: Check release version and runner architecture
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}

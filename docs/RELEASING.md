@@ -39,6 +39,15 @@ Cada job instala pnpm 10.32.1 e Node da .nvmrc, instala com frozen-lockfile,
 gera/verifica a sintaxe do preload e empacota. Não precisa acessar o repositório
 da plataforma nem o serviço de produção. As ações são fixadas por commit.
 
+O runner macOS também executa `tests/capture-native.spec.ts` no Electron real:
+o pedido de tela deve abrir o seletor mesmo com câmera/microfone negados,
+permitir cancelamento e recusar subframes. O teste usa fontes sintéticas e um
+perfil isolado; não enumera janelas reais nem concede gravação de tela do host.
+No aceite do aplicativo instalado em um Mac de teste, confira a primeira seleção
+de janela/tela, a permissão em **Privacidade e Segurança > Gravação de Tela**
+(ou **Gravação de Tela e Áudio do Sistema**, conforme a versão do macOS), e a
+transmissão para outro participante. O teste do seletor não substitui esse aceite.
+
 O build macOS mantém Hardened Runtime e assina o aplicativo e seus helpers com
 `assets/entitlements.mac.plist`, incluindo `com.apple.security.device.audio-input`
 e `com.apple.security.device.camera`. As descrições de uso permanecem no Info.plist.

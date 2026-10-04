@@ -63,6 +63,33 @@ test('macOS checks the specific device and refuses ambiguous media checks', () =
   assert.equal(check({}), false);
 });
 
+test('macOS display capture reaches the picker without requesting camera or microphone consent', async () => {
+  const f = fixture('darwin', { microphone: 'denied', camera: 'denied' });
+  f.preferences.getMediaAccessStatus = () => {
+    throw new Error('Display capture must not query camera/microphone consent');
+  };
+  assert.equal(await f.request({ mediaTypes: [], securityOrigin: origin }), true);
+  assert.deepEqual(f.prompts, []);
+});
+
+test('empty macOS media requests require the trusted security origin and an explicit main frame', async () => {
+  const f = fixture();
+  for (const details of [
+    {},
+    { securityOrigin: 'https://other.example' },
+    { securityOrigin: 'file:///recovery/ui/index.html' },
+    { securityOrigin: origin, isMainFrame: false },
+    { securityOrigin: origin, isMainFrame: undefined },
+    { securityOrigin: origin, requestingUrl: 'https://other.example' },
+  ])
+    assert.equal(await f.request({ mediaTypes: [], ...details }), false);
+  assert.equal(
+    await f.request({ mediaTypes: [], securityOrigin: origin }, { ...f.contents }),
+    false,
+  );
+  assert.deepEqual(f.prompts, []);
+});
+
 test('missing, empty and unrecognized macOS media requests never prompt for unrelated devices', async () => {
   const f = fixture();
   for (const mediaTypes of [undefined, [], ['unknown'], ['audio', 'screen']])

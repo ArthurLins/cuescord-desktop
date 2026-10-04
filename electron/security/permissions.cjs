@@ -34,8 +34,16 @@ function installPermissions(
       allowPermission(permission, details.requestingUrl, details, trustedUrl);
     if (!trusted()) return callback(false);
     if (platform !== 'darwin' || permission !== 'media') return callback(true);
-    const kinds = [...new Set(details.mediaTypes || [])].map((kind) => mediaKinds.get(kind));
-    if (!kinds.length || kinds.some((kind) => !kind)) return callback(false);
+    if (!Array.isArray(details.mediaTypes)) return callback(false);
+    // Electron 44 sends display capture as 'media' with no camera/mic types.
+    // Allow that trusted main-frame request to reach the capture picker; its
+    // gesture, selected source and macOS screen consent still govern capture.
+    if (!details.mediaTypes.length)
+      return callback(
+        details.isMainFrame === true && sameOrigin(details.securityOrigin, trustedUrl),
+      );
+    const kinds = [...new Set(details.mediaTypes)].map((kind) => mediaKinds.get(kind));
+    if (kinds.some((kind) => !kind)) return callback(false);
     const authorize = async () => {
       // Ask only for devices actually requested, and serialize native prompts.
       for (const kind of kinds) {

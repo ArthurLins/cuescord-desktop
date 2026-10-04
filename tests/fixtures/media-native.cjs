@@ -10,7 +10,7 @@ app.requestSingleInstanceLock = () => true;
 const show = BrowserWindow.prototype.show;
 BrowserWindow.prototype.show = function () {
   this.setOpacity(0);
-  this.setSkipTaskbar(true);
+  if (process.platform !== 'darwin') this.setSkipTaskbar(true);
   return show.call(this);
 };
 

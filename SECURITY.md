@@ -19,6 +19,10 @@ mantendo a sessão e uma chamada ativa. O menu **Fechar Cuescord** encerra o pro
 A origem principal pode solicitar microfone, câmera, notificações, clipboard,
 fullscreen e captura. Permissões desconhecidas e outras origens são negadas.
 A autorização do Electron não elimina prompts/restrições do sistema operacional.
+No Electron 44, o pedido de tela chega como `media` com `mediaTypes: []`;
+no macOS ele só pode prosseguir para o seletor quando o frame principal e
+`securityOrigin` pertencem à origem confiável. Esse pedido não autoriza câmera
+ou microfone, e não substitui o consentimento de gravação de tela do macOS.
 No macOS, cada pedido solicita somente os dispositivos necessários; uma chamada
 de voz não exige consentimento para a câmera. Consentimento negado/restrito não
 é contornado. Aplicativo e helpers incluem as permissões de áudio/câmera na
