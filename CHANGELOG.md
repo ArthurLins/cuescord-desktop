@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.4.4
 
 - Corrige as permissões assinadas de microfone e câmera no aplicativo e nos helpers macOS, preservando Hardened Runtime.
 - Solicita somente os dispositivos necessários no macOS, reutiliza consentimento concedido e respeita acesso negado pelo sistema.
