@@ -37,7 +37,11 @@ const sdk = await archive(
   'https://github.com/crow-misia/libwebrtc-bin/releases/download/140.7339.2.0/libwebrtc-win-x64.7z',
   '10b95069dc22cf6a60e9818cbcbb6a1d5698473e9ac4ce679e1258b97be58910',
 );
-run('tar', ['-xf', sdk, '-C', cache]);
+// Windows Server 2022's bundled tar lacks the LZMA codec. Hosted runners have
+// 7-Zip; newer Windows tar is a usable fallback for local builds.
+const sevenZip = path.join(process.env.ProgramFiles || 'C:/Program Files', '7-Zip/7z.exe');
+if (existsSync(sevenZip)) run(sevenZip, ['x', sdk, `-o${cache}`, '-y', '-bso0', '-bsp0']);
+else run('tar', ['-xf', sdk, '-C', cache]);
 await copyFile(path.join(cache, 'release/webrtc.lib'), path.join(cache, 'release/libwebrtc.lib'));
 const build = path.join(cache, 'build');
 const vswhere = path.join(

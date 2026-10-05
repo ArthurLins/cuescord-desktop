@@ -74,6 +74,8 @@ energia; não exporta SDP, credenciais ou áudio.
 ## Build e aceite
 
 Node conforme `.nvmrc`, Rust 1.94.0, Visual Studio C++ Build Tools e CMake.
+Windows Server 2022 usa 7-Zip para extrair o SDK; `tar` recente serve como alternativa
+local quando suporta LZMA. Os runners de CI já incluem 7-Zip.
 `pnpm native:build` verifica hashes, compila e testa C++/Rust.
 Rust/C++ ligam estaticamente o runtime C, sem exigir instalação separada do
 Visual C++ Redistributable. O build seleciona explicitamente Rust 1.94.0.
