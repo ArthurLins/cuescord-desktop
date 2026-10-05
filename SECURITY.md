@@ -12,8 +12,10 @@ pública expõe metadados, indicadores de mensagens/chamada e áudio autorizado;
 execução de comandos ou leitura arbitrária de arquivos disponíveis ao site.
 
 Os indicadores aceitam apenas contagem inteira não negativa e estados booleanos
-de chamada/microfone, enviados pelo frame principal da origem confiável. Alteram
-somente os ícones; não ativam dispositivos. Fechar a janela a oculta na bandeja,
+de chamada/microfone, enviados pelo frame principal da origem confiável. Atualizam
+os ícones e desativam a limitação do renderer em segundo plano enquanto há uma
+chamada, inclusive mutada; não ativam dispositivos. Saída, recarga ou falha do
+renderer restauram a limitação. Fechar a janela a oculta na bandeja,
 mantendo a sessão e uma chamada ativa. O menu **Fechar Cuescord** encerra o processo.
 
 A origem principal pode solicitar microfone, câmera, notificações, clipboard,

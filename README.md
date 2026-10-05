@@ -48,6 +48,10 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 - Fechar a janela envia o cliente para a bandeja, preservando chamadas e mensagens.
   Clique no ícone para reabrir; para encerrar, use **Fechar Cuescord** no menu do
   botão direito da bandeja.
+- Durante chamadas, inclusive com o microfone silenciado, o desktop desativa a
+  limitação do renderer em segundo plano para proteger o ritmo do áudio. Ao sair
+  da chamada, recarregar a página ou encerrar o renderer, restaura a limitação.
+  Isso pode aumentar o consumo de recursos enquanto uma chamada está ativa.
 - No Windows, o ícone da barra de tarefas mostra as mensagens não lidas (`99+`
   acima de 99). Durante uma chamada, os ícones da janela e da bandeja mostram um
   telefone com o microfone ativado ou desativado. Ao sair, volta o ícone normal.

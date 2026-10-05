@@ -19,7 +19,15 @@ function setup(platform = 'win32') {
   };
   const calls = [];
   const frame = { url: 'https://cuescord.cuesc.net/channels/1' };
-  const contents = Object.assign(new EventEmitter(), { mainFrame: frame });
+  let throttling = true;
+  const contents = Object.assign(new EventEmitter(), {
+    mainFrame: frame,
+    getBackgroundThrottling: () => throttling,
+    setBackgroundThrottling: (allowed) => {
+      throttling = allowed;
+      calls.push(['throttle', allowed]);
+    },
+  });
   const window = Object.assign(new EventEmitter(), {
     webContents: contents,
     isDestroyed: () => false,
@@ -147,11 +155,36 @@ test('reload and renderer crashes reset stale badges and call states', () => {
   handler(event, active);
   contents.emit('did-start-navigation', {}, 'https://cuescord.cuesc.net/dms/1', true, true);
   assert.match(tray.tooltip, /chamada/);
+  assert.equal(contents.getBackgroundThrottling(), false);
   contents.emit('did-start-navigation', {}, 'https://cuescord.cuesc.net/', false, true);
   assert.equal(tray.tooltip, 'Cuescord');
+  assert.equal(contents.getBackgroundThrottling(), true);
   handler(event, active);
   contents.emit('render-process-gone');
   assert.equal(tray.tooltip, 'Cuescord');
+  assert.equal(contents.getBackgroundThrottling(), true);
+});
+
+test('active calls keep background scheduling through mute and tray hide, leaving restores it', () => {
+  const { handler, event, window, contents, calls } = setup();
+  assert.equal(contents.getBackgroundThrottling(), true);
+  handler(event, { unreadCount: 0, inCall: true, microphoneMuted: false });
+  window.emit('close', { preventDefault() {} });
+  handler(event, { unreadCount: 4, inCall: true, microphoneMuted: true });
+  assert.equal(contents.getBackgroundThrottling(), false);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === 'throttle'),
+    [['throttle', false]],
+  );
+  handler(event, { unreadCount: 4, inCall: false, microphoneMuted: false });
+  assert.equal(contents.getBackgroundThrottling(), true);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === 'throttle'),
+    [
+      ['throttle', false],
+      ['throttle', true],
+    ],
+  );
 });
 
 test('untrusted windows, subframes, origins and malformed state cannot update native presence', () => {

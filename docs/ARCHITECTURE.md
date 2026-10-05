@@ -18,7 +18,7 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | --- | --- |
 | electron/main.cjs | Uma janela, sessão persistente, links externos e controles |
 | electron/window/window-controls.cjs | Comandos IPC da janela com validação de remetente |
-| electron/window/desktop-presence.cjs, status-icons.cjs | Bandeja, fechar para ocultar, contador Windows e indicadores de chamada/microfone; IPC com estado e origem validados |
+| electron/window/desktop-presence.cjs, status-icons.cjs | Bandeja, fechar para ocultar, contador Windows, indicadores de chamada/microfone e proteção de chamada contra limitação em segundo plano; IPC com estado e origem validados |
 | electron/update/window.cjs, preload.cjs, ui/ | Janela local isolada; IPC exclusivo para atualização |
 | electron/update/policy.cjs, network.cjs, updater.cjs | HTTPS restrito, assinatura, download, verificação e abertura do instalador |
 | electron/update/trusted-keys.json | Chaves públicas de atualização fixadas no cliente |

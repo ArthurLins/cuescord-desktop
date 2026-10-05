@@ -38,6 +38,11 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
         const { overlay, icon, tooltip, description } = (globalThis as any).presenceTest;
         return { overlay, icon, tooltip, description };
       });
+    const throttling = () =>
+      client.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.getBackgroundThrottling(),
+      );
+    expect(await throttling()).toBe(true);
     expect(await page.frames()[1].evaluate(() => typeof (window as any).__CUESCORD_DESKTOP__)).toBe(
       'undefined',
     );
@@ -47,10 +52,12 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
     expect((await state()).overlay).not.toBeNull();
     expect((await state()).description).toBe('4 mensagens não lidas');
     await update(140, true, false);
+    expect(await throttling()).toBe(false);
     const active = await state();
     expect(active.icon).not.toBe(normal.icon);
     expect(active.tooltip).toContain('microfone ativado');
     await update(140, true, true);
+    expect(await throttling()).toBe(false);
     const muted = await state();
     expect(muted.icon).not.toBe(active.icon);
     expect(muted.overlay).toBe(active.overlay);
@@ -68,6 +75,29 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
       )
       .toBe(false);
     expect(page.isClosed()).toBe(false);
+    expect(await throttling()).toBe(false);
+    // Exercise an outgoing-only audio clock while the native window is hidden,
+    // without relying on audible playback to keep the renderer active.
+    const hiddenClock = await page.evaluate(async () => {
+      const context = new AudioContext({ sampleRate: 48000 });
+      const source = context.createOscillator();
+      const destination = context.createMediaStreamDestination();
+      source.connect(destination);
+      source.start();
+      try {
+        await context.resume();
+        const startWall = performance.now();
+        const startAudio = context.currentTime;
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        return (context.currentTime - startAudio) / ((performance.now() - startWall) / 1000);
+      } finally {
+        source.stop();
+        destination.stream.getTracks().forEach((track) => track.stop());
+        await context.close();
+      }
+    });
+    expect(hiddenClock).toBeGreaterThan(0.9);
+    expect(hiddenClock).toBeLessThan(1.1);
     // Presence updates continue in the same renderer while hidden in the tray.
     await update(3, true, false);
     expect((await state()).tooltip).toContain('3 mensagens não lidas');
@@ -81,10 +111,12 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
       )
       .toBe(true);
     await update(0, false, false);
+    expect(await throttling()).toBe(true);
     expect(await state()).toMatchObject({ icon: normal.icon, overlay: null, tooltip: 'Cuescord' });
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Desktop presence' })).toBeVisible();
     expect((await state()).tooltip).toBe('Cuescord');
+    expect(await throttling()).toBe(true);
     await client.evaluate(() => {
       const tray = (globalThis as any).presenceTest;
       setImmediate(() =>

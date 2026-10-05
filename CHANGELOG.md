@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7
+
+- Desativa a limitação do renderer em segundo plano durante chamadas, inclusive com o microfone silenciado, para proteger o ritmo do áudio ao minimizar ou fechar para a bandeja.
+- Restaura a limitação ao sair da chamada, recarregar a página ou encerrar o renderer, mantendo a economia de recursos fora das chamadas.
+- Acrescenta testes da política de segundo plano e do avanço do relógio de áudio com a janela oculta no Electron real.
+
 ## 0.4.6
 
 - Adiciona áudio de aplicativo e de tela no macOS 13+, com escolha explícita, ScreenCaptureKit e exclusão do próprio Cuescord.

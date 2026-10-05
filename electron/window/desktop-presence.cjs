@@ -68,6 +68,12 @@ function installDesktopPresence({
       ]),
     );
     if (!window || window.isDestroyed()) return;
+    // A running audio context can still fall behind while the renderer is in
+    // the background, especially under game load. Disable renderer background
+    // throttling for calls, including muted calls, and restore it when idle.
+    const throttle = !state.inCall;
+    if (window.webContents.getBackgroundThrottling() !== throttle)
+      window.webContents.setBackgroundThrottling(throttle);
     if (platform === 'win32' || platform === 'linux') window.setIcon(icon);
     if (platform === 'win32') {
       const key = Math.min(state.unreadCount, 100);
