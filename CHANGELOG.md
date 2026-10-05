@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.8
+
+- Adiciona voz nativa experimental no Windows x64, desabilitada por padrão e habilitável nas configurações de voz fora da chamada, com interface web e servidor compatíveis.
+- Processa captura WASAPI, filtros WebRTC, Opus e reprodução em um processo nativo separado, sem transportar PCM pela interface; câmera e compartilhamento continuam no caminho atual.
+- Preserva os controles de mute, deafen, atividade de voz, push-to-talk e volumes pelo contrato compartilhado; mantém dispositivos nativos e web separados.
+- Limita filas, mensagens e prazos; encerra o motor ao sair, navegar ou perder a sessão e permite recuperação com voz padrão em falhas, preservando mute e deafen.
+- Protege o processo de voz contra limitação de energia em segundo plano, recupera dispositivos e monitora o ritmo de captura para detectar degradação persistente.
+- Inclui os binários e avisos das dependências nativas no instalador Windows, com versões e hashes fixados e testes de protocolo, áudio e isolamento da ponte.
+
 ## 0.4.7
 
 - Desativa a limitação do renderer em segundo plano durante chamadas, inclusive com o microfone silenciado, para proteger o ritmo do áudio ao minimizar ou fechar para a bandeja.
