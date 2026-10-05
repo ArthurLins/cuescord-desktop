@@ -41,6 +41,14 @@ de áudio ou tela. Outros arquivos locais e subframes não podem usar esses cont
 
 ## Rede e dados locais
 
+A voz nativa experimental usa uma sessão restrita ao frame principal confiável,
+com preferência local inicialmente desabilitada. O helper Rust e a DLL WebRTC
+são caminhos fixos do pacote; não aceitam código, caminhos, shell ou tokens de
+autenticação da página. Só processam voz. As filas e mensagens têm limites e
+prazos. Saída, navegação, falha ou timeout encerram o processo e liberam dispositivos.
+Não há gravação ou download de dependências durante a chamada. PCM não passa
+pelo renderer nesse caminho. Veja [docs/NATIVE-VOICE.md](docs/NATIVE-VOICE.md).
+
 - O site usa a rede para login, conteúdo e chamadas; destinos de mídia são
   determinados pelo serviço remoto e podem incluir servidores STUN/TURN.
 - Não há coletor de telemetria ou crashReporter configurado pelo cliente.

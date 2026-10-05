@@ -1,5 +1,9 @@
 # Mapa do cliente
 
+A voz nativa experimental e seu contrato público estão documentados em
+[NATIVE-VOICE.md](NATIVE-VOICE.md). Ela usa um processo separado no Windows x64,
+desabilitado por padrão, mantendo câmera e compartilhamento no renderer.
+
 ## Processos e fronteiras
 
 ```text

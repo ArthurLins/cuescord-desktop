@@ -27,7 +27,17 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   asarUnpack: ['node_modules/**/*.node'],
-  win: { target: [{ target: 'nsis', arch: ['x64'] }], icon: 'assets/icons/icon.ico' },
+  win: {
+    target: [{ target: 'nsis', arch: ['x64'] }],
+    icon: 'assets/icons/icon.ico',
+    extraResources: [
+      {
+        from: '.cache/native-voice/bin',
+        to: 'native-voice',
+        filter: ['cuescord-voice.exe', 'CuescordVoiceBackend.dll', '*NOTICES.txt'],
+      },
+    ],
+  },
   nsis: {
     oneClick: false,
     perMachine: false,

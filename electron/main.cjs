@@ -20,6 +20,7 @@ const { installPermissions } = require('./security/permissions.cjs');
 const { installCapture } = require('./capture/capture.cjs');
 const { installUpdates } = require('./update/window.cjs');
 const { installAudio } = require('./audio/audio.cjs');
+const { installNativeVoice } = require('./voice/native-voice.cjs');
 
 app.setName('Cuescord');
 app.setAppUserModelId('net.cuesc.cuescord');
@@ -64,6 +65,7 @@ function createWindow(appSession) {
     },
   });
   mainWindow = win;
+  installNativeVoice({ app, ipcMain, window: win, trustedUrl });
   desktopPresence.attach(win);
   const recovery = installPageRecovery({ window: win, trustedUrl, recoveryUrl });
   win.on('page-title-updated', (event) => event.preventDefault());

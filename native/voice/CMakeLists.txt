@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.20)
+project(CuescordVoiceBackend LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+  add_compile_options(/EHsc)
+endif()
+include(FetchContent)
+FetchContent_Declare(libsdptransform
+  URL https://codeload.github.com/ibc/libsdptransform/tar.gz/refs/tags/1.2.10
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  URL_HASH SHA256=13d35698387c9d329531ae4f218fe178e2190bd2d04cfef0b05540d043e02209)
+FetchContent_Declare(mediasoupclient
+  URL https://codeload.github.com/versatica/libmediasoupclient/tar.gz/b9602ba50477d9a22b673fc3e6b5abff16c02deb
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  URL_HASH SHA256=1c265ea314a492451cb3210352306fb2f9673bd8f841e8d443f08347e6ecfd65)
+FetchContent_MakeAvailable(mediasoupclient)
+execute_process(COMMAND ${CMAKE_COMMAND} -DROOT=${mediasoupclient_SOURCE_DIR}
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/patch-mediasoup.cmake COMMAND_ERROR_IS_FATAL ANY)
+option(CUESCORD_VOICE_TRACE "Trace SDK function names only (local diagnosis)" OFF)
+if(CUESCORD_VOICE_TRACE)
+  target_compile_definitions(mediasoupclient PRIVATE MSC_LOG_TRACE)
+endif()
+add_library(CuescordVoiceBackend SHARED cpp/engine.cpp)
+target_include_directories(CuescordVoiceBackend PRIVATE ${mediasoupclient_SOURCE_DIR}/include)
+target_link_libraries(CuescordVoiceBackend PRIVATE mediasoupclient)
+if(CUESCORD_VOICE_TRACE)
+  target_compile_definitions(CuescordVoiceBackend PRIVATE CUESCORD_VOICE_TRACE)
+endif()
+add_executable(VoiceGateTests cpp/gate_test.cpp)
+target_link_libraries(VoiceGateTests PRIVATE mediasoupclient)
+enable_testing()
+add_test(NAME voice_gate COMMAND VoiceGateTests)
+if(WIN32)
+  target_compile_definitions(CuescordVoiceBackend PRIVATE CUESCORD_VOICE_EXPORTS)
+  foreach(target CuescordVoiceBackend VoiceGateTests)
+    target_link_libraries(${target} PRIVATE ws2_32 secur32 crypt32 iphlpapi winmm dmoguids wmcodecdspuuid amstrmid msdmo strmiids ole32 oleaut32 uuid avrt)
+  endforeach()
+endif()

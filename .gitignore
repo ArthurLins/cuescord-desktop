@@ -10,6 +10,7 @@
 /.build/
 /.swiftpm/
 /.pnpm-store/
+/native/voice/target/
 *.log
 .DS_Store
 Thumbs.db

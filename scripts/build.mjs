@@ -2,7 +2,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import './build-mac-audio.mjs';
 
 const root = new URL('../', import.meta.url);
-const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss] =
+const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss, voiceBridge] =
   await Promise.all(
     [
       'customizations/titlebar/desktop.js',
@@ -12,6 +12,7 @@ const [source, css, titlebarCss, manifest, audioBridge, captureModal, captureCss
       'customizations/audio/audio.js',
       'customizations/capture/capture-modal.js',
       'customizations/capture/capture-modal.css',
+      'customizations/voice/voice.js',
     ].map((file) => readFile(new URL(file, root), 'utf8')),
   );
 const { version } = JSON.parse(manifest);
@@ -32,7 +33,7 @@ if (process.isMainFrame && originArg) {
       takeAudioRequested: () => { const audio = captureAudio; captureAudio = undefined; return audio; },
     };
     const presence = { update: state => ipcRenderer.invoke('cuescord:desktop:presence', { unreadCount: state.unreadCount, inCall: state.inCall, microphoneMuted: state.microphoneMuted }) };
-    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', presence, screenShare, screenAudio: (${audioBridge})(ipcRenderer) });
+    contextBridge.exposeInMainWorld('__CUESCORD_DESKTOP__', { version: ${JSON.stringify(version)}, platform, engine: 'electron', presence, screenShare, nativeVoice: (${voiceBridge})(ipcRenderer), screenAudio: (${audioBridge})(ipcRenderer) });
     const controls = {
       setImageAnimationPolicy: policy => ipcRenderer.invoke('cuescord:window', policy === 'noAnimation' ? 'pause-image-animations' : 'resume-image-animations'),
       minimize: () => ipcRenderer.invoke('cuescord:window', 'minimize'),
