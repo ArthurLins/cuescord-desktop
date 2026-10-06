@@ -43,12 +43,19 @@ struct ReceiverQualitySample {
   uint64_t samples = 0, concealed = 0, accelerated = 0, received = 0, lost = 0;
 };
 
+struct ReceiverQualityWindow {
+  ReceiverQualitySample delta;
+  bool measurable = false, bad = false, networkBad = false;
+};
+
 class ReceiverQualityMonitor {
   QualityWatchdog watchdog;
   ReceiverQualitySample previous;
+  ReceiverQualityWindow window;
   bool sampled = false;
 
  public:
+  const ReceiverQualityWindow& lastWindow() const { return window; }
   void resetSamples() { sampled = false; }
   RecoveryDecision observe(int64_t now, bool complete, const ReceiverQualitySample& current) {
     const auto delta = [](uint64_t value, uint64_t before) {
@@ -68,6 +75,9 @@ class ReceiverQualityMonitor {
     const bool bad =
         samples > 0 && (delta(current.concealed, previous.concealed) / samples > 0.15 ||
                         delta(current.accelerated, previous.accelerated) / samples > 0.05);
+    window = {{uint64_t(samples), delta(current.concealed, previous.concealed),
+               delta(current.accelerated, previous.accelerated), packets, lost},
+              measurable, bad, loss > 0.03};
     previous = current;
     sampled = complete;
     return watchdog.observe(now, measurable, bad, loss > 0.03);

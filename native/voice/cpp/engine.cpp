@@ -513,6 +513,16 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
               const auto action =
                   health.monitor.observe(stamp, complete && elapsed <= 4,
                                          {samples, concealed, accelerated, received, lost});
+              const auto& window = health.monitor.lastWindow();
+              if (window.measurable && window.bad)
+                emit({{"type", "quality"}, {"reason", "receiver-quality-degraded"},
+                      {"data", {{"samples", window.delta.samples},
+                                {"concealed", window.delta.concealed},
+                                {"accelerated", window.delta.accelerated},
+                                {"received", window.delta.received},
+                                {"lost", window.delta.lost},
+                                {"networkBad", window.networkBad},
+                                {"elapsedSeconds", elapsed}}}});
               health.statsWarning = false;
               if (action == RecoveryDecision::Network && !health.networkWarning)
                 emit({{"type", "quality"}, {"reason", "network-degraded"}});

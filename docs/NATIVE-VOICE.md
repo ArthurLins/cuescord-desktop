@@ -178,6 +178,9 @@ diagnóstico existentes, com referências
 prefixadas para não colidir com vídeo. O ZIP registra motor, blocos e proteção de
 energia, prioridade MMCSS, gaps da captura, AGC, limitação de picos e reparos;
 não exporta SDP, credenciais ou áudio.
+Janelas degradadas registram também os deltas de amostras, ocultação, aceleração,
+pacotes e perda usados pelo detector, com duração da janela e indicação de rede
+degradada. Esses contadores adicionais ficam no histórico local do ZIP, sem IDs.
 
 O indicador de AGC representa o último bloco processado, sem alternar para
 inativo enquanto o próximo bloco é calculado. `autoGainFrames` conta blocos
