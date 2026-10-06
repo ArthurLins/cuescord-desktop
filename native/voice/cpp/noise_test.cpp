@@ -44,14 +44,14 @@ int main() {
       for (float& value : samples) {
         random = random * 1664525u + 1013904223u;
         value = (float(random >> 8) / 16777216.0f - 0.5f) * 3000;
-        if (frame >= 100) inputEnergy += value * value;
+        if (frame >= 100) inputEnergy += double(value) * value;
       }
       check(noise.process(samples.data(), samples.size(), NoiseMode::Rnnoise),
             "continuous capture must process");
       for (float value : samples) {
         check(std::isfinite(value) && std::abs(value) <= 32768,
               "output must remain finite and bounded");
-        if (frame >= 100) outputEnergy += value * value;
+        if (frame >= 100) outputEnergy += double(value) * value;
       }
     }
     const double averageMs =
