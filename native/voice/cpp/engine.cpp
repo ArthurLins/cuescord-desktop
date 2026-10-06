@@ -38,6 +38,8 @@ using Clock = std::chrono::steady_clock;
 
 #include "audio_devices.hpp"
 #include "audio_gate.hpp"
+#include "voice_health.hpp"
+#include "voice_mixer.hpp"
 #ifdef CUESCORD_VOICE_TRACE
 #include "Logger.hpp"
 class FunctionTrace final : public mediasoupclient::Logger::LogHandlerInterface {
@@ -73,9 +75,20 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   std::unique_ptr<mediasoupclient::Producer> producer;
   std::map<std::string, std::unique_ptr<mediasoupclient::Consumer>> consumers;
   std::map<std::string, double> volumes;
+  struct ReceiverHealth {
+    Json params;
+    ReceiverQualityMonitor monitor;
+    bool networkWarning = false, statsWarning = false;
+  };
+  std::map<std::string, ReceiverHealth> receiverHealth;
+  QualityWatchdog captureWatchdog;
+  uint64_t captureRecoveries = 0, receiverRecoveries = 0;
+  bool receiveStatsWarning = false;
+  int roomBitrate = 64000;
   AudioDevices audioDevices;
   bool ssl = false;
   Json preferences = Json::object();
+  bool fallbackApplied = false;
   bool com = false, powerProtection = false;
   bool sockets = false;
   std::thread runner;
@@ -83,7 +96,8 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   void emit(Json value) {
     std::lock_guard lock(mutex);
     // Meters are best effort. Signaling/responses are never silently dropped.
-    if (value.value("type", "") == "meter" && events.size() >= 64) return;
+    const auto type = value.value("type", "");
+    if ((type == "meter" || type == "quality") && events.size() >= 64) return;
     if (events.size() >= 256) {
       stopped = true;
       wake.notify_all();
@@ -145,10 +159,10 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
     webrtc::BuiltinAudioProcessingBuilder builder;
     builder.SetCapturePostProcessing(std::make_unique<Gate>(controls));
     apm = builder.Build(webrtc::CreateEnvironment());
-    factory = webrtc::CreatePeerConnectionFactory(network.get(), worker.get(), signaling.get(), adm,
-                                                  webrtc::CreateBuiltinAudioEncoderFactory(),
-                                                  webrtc::CreateBuiltinAudioDecoderFactory(),
-                                                  nullptr, nullptr, nullptr, apm);
+    factory = webrtc::CreatePeerConnectionFactory(
+        network.get(), worker.get(), signaling.get(), adm,
+        webrtc::CreateBuiltinAudioEncoderFactory(), webrtc::CreateBuiltinAudioDecoderFactory(),
+        nullptr, nullptr, webrtc::make_ref_counted<VoiceMixer>(controls), apm);
     if (!factory) throw std::runtime_error("voice factory unavailable");
     options.factory = factory.get();
     options.config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
@@ -181,9 +195,7 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   void volume(mediasoupclient::Consumer* consumer) {
     auto* track = static_cast<webrtc::AudioTrackInterface*>(consumer->GetTrack());
     const auto id = consumer->GetProducerId();
-    track->GetSource()->SetVolume(
-        controls.deafened.load() ? 0
-                                 : controls.output.load() * (volumes.count(id) ? volumes[id] : 1));
+    track->GetSource()->SetVolume(volumes.count(id) ? volumes[id] : 1);
   }
   static Json browserStats(Json rows) {
     // libwebrtc RTCStats::ToJson uses microseconds; RTCStatsReport in JS uses
@@ -192,6 +204,43 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
       if (row.contains("timestamp") && row.at("timestamp").is_number())
         row["timestamp"] = row.at("timestamp").get<double>() / 1000.0;
     return rows;
+  }
+  bool applyVoiceEncoding(int bitrate) {
+    return signaling->BlockingCall([&] {
+      auto* sender = producer->GetRtpSender();
+      auto params = sender->GetParameters();
+      if (params.encodings.size() != 1) return false;
+      params.encodings[0].max_bitrate_bps = bitrate;
+      params.encodings[0].adaptive_ptime = true;
+      params.encodings[0].bitrate_priority = 4.0;
+      params.encodings[0].network_priority = webrtc::Priority::kLow;
+      return sender->SetParameters(params).ok();
+    });
+  }
+  NoiseMode requestedNoise() const {
+    if (!preferences.value("noiseSuppression", true)) return NoiseMode::Off;
+    return preferences.value("noiseSuppressionMode", std::string{"native"}) == "rnnoise"
+               ? NoiseMode::Rnnoise
+               : NoiseMode::Native;
+  }
+  const char* noiseStatus() const {
+    const auto mode = controls.noiseMode.load();
+    if (mode == NoiseMode::Off) return "off";
+    if (mode == NoiseMode::Native) return "native";
+    if (controls.noiseFailed.load()) return "fallback";
+    return controls.noiseActive.load() ? "rnnoise" : "loading";
+  }
+  void applyProcessing() {
+    webrtc::AudioProcessing::Config config;
+    config.echo_canceller.enabled = preferences.value("echoCancellation", true);
+    const auto mode = requestedNoise();
+    config.noise_suppression.enabled =
+        mode == NoiseMode::Native || (mode == NoiseMode::Rnnoise && controls.noiseFailed.load());
+    config.noise_suppression.level = webrtc::AudioProcessing::Config::NoiseSuppression::kHigh;
+    // Gate owns the built-in AGC2 after denoising, including the RNNoise path.
+    config.gain_controller1.enabled = false;
+    config.gain_controller2.enabled = false;
+    apm->ApplyConfig(config);
   }
   Json execute(const std::string& method, Json data) {
     initialize();
@@ -204,17 +253,22 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
     if (method == "configure") {
       const bool processingChanged =
           !apm || preferences.empty() || data.contains("echoCancellation") ||
-          data.contains("noiseSuppression") || data.contains("autoGainControl");
+          data.contains("noiseSuppression") || data.contains("noiseSuppressionMode") ||
+          data.contains("autoGainControl");
+      const bool noiseChanged = preferences.empty() || data.contains("noiseSuppression") ||
+                                data.contains("noiseSuppressionMode");
       preferences.update(data);
       data = preferences;
       selectDevices(data);
-      webrtc::AudioProcessing::Config config;
-      config.echo_canceller.enabled = data.value("echoCancellation", true);
-      config.noise_suppression.enabled = data.value("noiseSuppression", true);
-      config.noise_suppression.level = webrtc::AudioProcessing::Config::NoiseSuppression::kHigh;
-      config.gain_controller2.enabled = data.value("autoGainControl", true);
-      config.gain_controller2.adaptive_digital.enabled = data.value("autoGainControl", true);
-      if (processingChanged) apm->ApplyConfig(config);
+      if (noiseChanged) {
+        controls.noiseMode = NoiseMode::Off;
+        controls.noiseActive = false;
+        controls.noiseFailed = !controls.noiseAvailable.load();
+        ++controls.noiseRevision;
+        fallbackApplied = false;
+      }
+      if (processingChanged) applyProcessing();
+      controls.noiseMode = requestedNoise();
       if (data.contains("volumes"))
         volumes = data.at("volumes").get<std::map<std::string, double>>();
       for (auto& [id, consumer] : consumers) volume(consumer.get());
@@ -243,19 +297,43 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
       if (!send || producer) throw std::runtime_error("invalid producer");
       webrtc::AudioOptions audio;
       audio.echo_cancellation = preferences.value("echoCancellation", true);
-      audio.auto_gain_control = preferences.value("autoGainControl", true);
-      audio.noise_suppression = preferences.value("noiseSuppression", true);
+      audio.auto_gain_control = false;  // The post-denoising stage owns AGC2.
+      audio.noise_suppression =
+          requestedNoise() == NoiseMode::Native ||
+          (requestedNoise() == NoiseMode::Rnnoise && controls.noiseFailed.load());
       auto source = factory->CreateAudioSource(audio);
       microphone = factory->CreateAudioTrack("cuescord-microphone", source.get());
       const int bitrate = std::clamp(data.value("bitrate", 64000), 6000, 510000);
-      Json codecs = {{"opusMaxAverageBitrate", uint32_t(bitrate)},
+      roomBitrate = bitrate;
+      // Negotiate the highest room ceiling once. Encoding max_bitrate_bps
+      // enforces this room and can change live in either direction, without SDP.
+      Json codecs = {{"opusMaxAverageBitrate", uint32_t(256000)},
                      {"opusStereo", false},
                      {"opusFec", true},
                      {"opusDtx", true}};
       std::vector<webrtc::RtpEncodingParameters> encodings(1);
       encodings[0].max_bitrate_bps = bitrate;
+      encodings[0].adaptive_ptime = true;
+      encodings[0].bitrate_priority = 4.0;  // Browser priority: "high".
+      // Keep network_priority at kLow. A custom DSCP priority disables WebRTC's
+      // audio bitrate allocation; bitrate priority does not change DSCP.
       producer.reset(send->Produce(this, microphone.get(), &encodings, &codecs, nullptr));
+      // Audio transceiver initialization can ignore adaptive/priority fields.
+      // Apply them to the installed sender; stats expose the actual parameters.
+      if (!applyVoiceEncoding(bitrate))
+        throw std::runtime_error("audio encoding update failed");
+      applyProcessing();  // The media engine may apply source options during track registration.
       return {{"producerId", producer->GetId()}};
+    }
+    if (method == "set-bitrate") {
+      const int bitrate = data.at("bitrate").get<int>();
+      if (!producer || (bitrate != 32000 && bitrate != 64000 && bitrate != 96000 &&
+                        bitrate != 128000 && bitrate != 256000))
+        throw std::runtime_error("invalid room bitrate");
+      const bool applied = applyVoiceEncoding(bitrate);
+      if (!applied) throw std::runtime_error("audio bitrate update failed");
+      roomBitrate = bitrate;
+      return {{"bitrate", roomBitrate}};
     }
     if (method == "consume") {
       if (!recv || consumers.size() >= 256) throw std::runtime_error("invalid consumer");
@@ -264,6 +342,7 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
       auto params = data.at("rtpParameters");
       consumers[id].reset(recv->Consume(this, data.at("id"), id, "audio", &params));
       volume(consumers[id].get());
+      receiverHealth[id].params = data;
       return Json::object();
     }
     if (method == "close-consumer") {
@@ -273,16 +352,59 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
         item->second->Close();
         consumers.erase(item);
       }
+      receiverHealth.erase(id);
       return Json::object();
     }
-    if (method == "stats")
+    if (method == "stats") {
+      const auto encodingParameters = producer
+          ? signaling->BlockingCall([&] {
+              return producer->GetRtpSender()->GetParameters().encodings;
+            })
+          : std::vector<webrtc::RtpEncodingParameters>{};
+      const int encodingBitrate = encodingParameters.empty()
+          ? 0 : encodingParameters[0].max_bitrate_bps.value_or(0);
       return {{"send", send ? browserStats(send->GetStats()) : Json::array()},
               {"recv", recv ? browserStats(recv->GetStats()) : Json::array()},
               {"captureFrames", controls.frames.load()},
               {"inputLevel", controls.level.load()},
               {"engine", "libwebrtc-m140"},
               {"powerProtection", powerProtection},
-              {"noiseSuppressionMode", "native"}};
+              {"roomAudioBitrate", roomBitrate},
+              {"microphoneEncodingBitrate", encodingBitrate},
+              {"microphoneAdaptivePtime",
+               !encodingParameters.empty() && encodingParameters[0].adaptive_ptime},
+              {"microphoneBitratePriority",
+               encodingParameters.empty() ? 0 : encodingParameters[0].bitrate_priority},
+              {"captureMmcss", controls.captureMmcss.load()},
+              {"renderMmcss", controls.renderMmcss.load()},
+              {"captureMmcssInherited", controls.captureMmcssInherited.load()},
+              {"renderMmcssInherited", controls.renderMmcssInherited.load()},
+              {"capturePriorityError", controls.capturePriorityError.load()},
+              {"renderPriorityError", controls.renderPriorityError.load()},
+              {"captureLateFrames", controls.captureLateFrames.load()},
+              {"captureMaxGapMs", double(controls.captureMaxGapMicros.load()) / 1000},
+              {"limitedCaptureFrames", controls.limitedCaptureFrames.load()},
+              {"limitedRenderFrames", controls.limitedRenderFrames.load()},
+              {"captureLimiterGain", controls.captureLimiterGain.load()},
+              {"renderLimiterGain", controls.renderLimiterGain.load()},
+              {"voiceBoost", controls.voiceBoost.load()},
+              {"autoGainActive", controls.autoGainActive.load()},
+              {"autoGainErrors", controls.autoGainErrors.load()},
+              {"autoGainFrames", controls.autoGainFrames.load()},
+              {"captureRecoveries", captureRecoveries},
+              {"receiverRecoveries", receiverRecoveries},
+              {"noiseSuppressionMode",
+               preferences.value("noiseSuppressionMode", std::string{"native"})},
+              {"noiseProcessorStatus", noiseStatus()},
+              {"webrtcNoiseSuppression", apm->GetConfig().noise_suppression.enabled},
+              {"noiseModel", "rnnoise-70f1d25-full-0a8755f8"},
+              {"noiseFrames", controls.noiseFrames.load()},
+              {"noiseProcessingAverageMs",
+               controls.noiseFrames.load() > 0
+                   ? double(controls.noiseMicros.load()) / controls.noiseFrames.load() / 1000
+                   : 0},
+              {"noiseProcessingMaxMs", double(controls.noiseMaxMicros.load()) / 1000}};
+    }
     if (method == "restart-ice" || method == "ice-servers") {
       auto* transport = data.value("direction", "") == "send"
                             ? static_cast<mediasoupclient::Transport*>(send.get())
@@ -298,8 +420,8 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   }
   void loop() {
     auto meterAt = Clock::now(), healthAt = Clock::now();
-    uint64_t healthFrames = 0;
-    int slowWindows = 0;
+    std::string lastNoiseStatus;
+    uint64_t healthFrames = 0, lateFrames = 0;
     while (!stopped) {
       Json command;
       {
@@ -323,18 +445,111 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
                 {"error", "native-operation-failed"}});
         }
       }
-      if (producer && Clock::now() - healthAt >= std::chrono::seconds(5)) {
+      if (apm && requestedNoise() == NoiseMode::Rnnoise && controls.noiseFailed.load() &&
+          !fallbackApplied) {
+        applyProcessing();  // Never change APM configuration from its audio callback.
+        fallbackApplied = true;
+      }
+      if (apm && lastNoiseStatus != noiseStatus()) {
+        lastNoiseStatus = noiseStatus();
+        emit({{"type", "processing-state"},
+              {"noiseProcessorStatus", lastNoiseStatus},
+              {"noiseSuppressionEffective", controls.noiseMode.load() != NoiseMode::Off}});
+      }
+      if (producer && Clock::now() - healthAt >= std::chrono::seconds(2)) {
         const auto now = Clock::now();
         const auto elapsed = std::chrono::duration<double>(now - healthAt).count();
         const auto frames = controls.frames.load();
         const auto ratio = double(frames - healthFrames) / (elapsed * 100);
-        slowWindows = ratio < 0.7 ? slowWindows + 1 : 0;
-        if (slowWindows >= 2) {
-          emit({{"type", "health"}, {"reason", "capture-clock-stalled"}});
-          slowWindows = 0;
+        const auto late = controls.captureLateFrames.load();
+        const auto stamp =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        const auto decision = captureWatchdog.observe(
+            stamp, elapsed <= 4,
+            ratio < 0.85 ||
+                double(late - lateFrames) / std::max<uint64_t>(1, frames - healthFrames) > 0.05);
+        if (decision == RecoveryDecision::Recover) {
+          if (audioDevices.restartCapture(*worker, *adm)) {
+            apm->Initialize();
+            ++captureRecoveries;
+            emit({{"type", "quality"}, {"reason", "capture-recovered"}});
+          } else
+            emit({{"type", "health"}, {"reason", "capture-recovery-failed"}});
+        } else if (decision == RecoveryDecision::Exhausted)
+          emit({{"type", "health"}, {"reason", "capture-recovery-exhausted"}});
+        // One RTC stats snapshot for the receive transport, irrespective of
+        // room size. Never synchronously request one report per speaker.
+        Json receiveStats = Json::array();
+        try {
+          if (recv && !receiverHealth.empty()) receiveStats = recv->GetStats();
+          receiveStatsWarning = false;
+        } catch (...) {
+          if (!receiveStatsWarning)
+            emit({{"type", "quality"}, {"reason", "receiver-stats-unavailable"}});
+          receiveStatsWarning = true;
+        }
+        for (auto& [id, health] : receiverHealth) {
+          const auto found = consumers.find(id);
+          if (found == consumers.end()) continue;
+          bool repairing = false;
+          try {
+            bool matched = false;
+            const auto ssrc =
+                health.params.at("rtpParameters").at("encodings").at(0).at("ssrc").get<uint32_t>();
+            for (const auto& row : receiveStats) {
+              if (row.value("type", "") != "inbound-rtp" || row.value("ssrc", uint32_t{0}) != ssrc)
+                continue;
+              matched = true;
+              const bool complete = row.contains("totalSamplesReceived") &&
+                                    row.contains("concealedSamples") &&
+                                    row.contains("removedSamplesForAcceleration") &&
+                                    row.contains("packetsReceived") && row.contains("packetsLost");
+              const uint64_t samples = row.value("totalSamplesReceived", uint64_t{0}),
+                             concealed = row.value("concealedSamples", uint64_t{0}),
+                             accelerated = row.value("removedSamplesForAcceleration", uint64_t{0}),
+                             received = row.value("packetsReceived", uint64_t{0});
+              const int64_t lostSigned = row.value("packetsLost", int64_t{0});
+              const uint64_t lost = uint64_t(std::max<int64_t>(0, lostSigned));
+              const auto action =
+                  health.monitor.observe(stamp, complete && elapsed <= 4,
+                                         {samples, concealed, accelerated, received, lost});
+              health.statsWarning = false;
+              if (action == RecoveryDecision::Network && !health.networkWarning)
+                emit({{"type", "quality"}, {"reason", "network-degraded"}});
+              health.networkWarning = action == RecoveryDecision::Network;
+              if (action == RecoveryDecision::Recover) {
+                repairing = true;
+                found->second->Close();
+                consumers.erase(found);
+                // Ask the authenticated web signaling owner for a fresh SFU
+                // consumer. Reusing its old MID would either duplicate the SDP
+                // section or retain the same decoder/NetEq state.
+                health.params = request("repair-consumer", {{"producerId", id}}).get();
+                const auto& p = health.params;
+                auto params = p.at("rtpParameters");
+                consumers[id].reset(recv->Consume(this, p.at("id"), id, "audio", &params));
+                volume(consumers[id].get());
+                request("resume-consumer", {{"consumerId", p.at("id")}}).get();
+                health.monitor.resetSamples();
+                ++receiverRecoveries;
+                emit({{"type", "quality"}, {"reason", "receiver-recovered"}});
+              } else if (action == RecoveryDecision::Exhausted)
+                emit({{"type", "health"}, {"reason", "receiver-recovery-exhausted"}});
+              break;
+            }
+            if (!matched) health.monitor.resetSamples();
+          } catch (...) {
+            health.monitor.resetSamples();
+            if (repairing || !health.statsWarning)
+              emit({{"type", repairing ? "health" : "quality"},
+                    {"reason",
+                     repairing ? "receiver-recovery-failed" : "receiver-stats-unavailable"}});
+            health.statsWarning = true;
+          }
         }
         healthAt = now;
         healthFrames = frames;
+        lateFrames = late;
       }
       if (producer && Clock::now() - meterAt >= std::chrono::milliseconds(100)) {
         meterAt = Clock::now();
@@ -411,6 +626,9 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
           controls.input = std::clamp(data.at("inputVolume").get<float>() / 100, 0.0f, 2.0f);
         if (data.contains("outputVolume"))
           controls.output = std::clamp(data.at("outputVolume").get<float>() / 100, 0.0f, 2.0f);
+        if (data.contains("autoGainControl"))
+          controls.autoGain = data.at("autoGainControl").get<bool>();
+        if (data.contains("voiceBoost")) controls.voiceBoost = data.at("voiceBoost").get<bool>();
       }
       std::lock_guard lock(mutex);
       if (stopped) return -1;
@@ -485,6 +703,9 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
 };
 
 VOICE_API unsigned cuescord_voice_version() noexcept { return 1; }
+VOICE_API unsigned cuescord_voice_capabilities() noexcept {
+  return 3;
+}  // RNNoise + quality controls.
 VOICE_API void* cuescord_voice_create() noexcept {
   try {
     return new Engine();

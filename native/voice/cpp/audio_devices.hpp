@@ -13,6 +13,12 @@ class AudioDevices {
   bool selected = false;
 
  public:
+  bool restartCapture(webrtc::Thread& worker, webrtc::AudioDeviceModule& adm) {
+    return worker.BlockingCall([&] {
+      return adm.Recording() && adm.StopRecording() == 0 && adm.InitRecording() == 0 &&
+             adm.StartRecording() == 0;
+    });
+  }
   void select(webrtc::Thread& worker, webrtc::AudioDeviceModule& adm, const std::string& nextInput,
               const std::string& nextOutput) {
     if (selected && nextInput == inputId && nextOutput == outputId) return;

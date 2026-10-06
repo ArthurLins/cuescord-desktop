@@ -18,9 +18,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let backend = Arc::new(backend::Backend::load()?);
     let running = Arc::new(AtomicBool::new(true));
     let output = Arc::new(Mutex::new(io::stdout()));
+    let noise_modes = if backend.supports_rnnoise() {
+        vec!["native", "rnnoise"]
+    } else {
+        vec!["native"]
+    };
     emit(
         &output,
-        &json!({"type":"ready", "protocol":VERSION, "engine":"libwebrtc-m140", "media":["voice"]}),
+        &json!({"type":"ready", "protocol":VERSION, "engine":"libwebrtc-m140", "media":["voice"], "noiseSuppressionModes":noise_modes, "voiceQualityProtocol":if backend.supports_quality() {1} else {0}}),
     )?;
     let reader_backend = backend.clone();
     let reader_running = running.clone();

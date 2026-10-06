@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.9
+
+- Adiciona RNNoise com modelo completo recente na voz nativa, preservando a escolha de filtro e mantendo AEC e AGC independentes, sem filtrar o áudio do compartilhamento.
+- Alinha ganho, atividade de voz, reforço de vozes baixas e volumes com as opções da web; limita picos e registra o processamento efetivamente ativo no diagnóstico.
+- Aplica os perfis de qualidade da sala durante a chamada e habilita adaptação individual de bitrate abaixo do teto, recuperando a qualidade quando a banda melhora.
+- Recupera ICE por transporte antes de recorrer à voz web, com tentativas e prazos limitados, cancelamento seguro e renovação autenticada da configuração de conexão.
+- Registra MMCSS nas threads de áudio e recupera captura ou decoder com degradação persistente, preservando filtros e controles; perdas reais de rede não provocam reparos indevidos de decoder.
+- Amplia testes de filtros, controle de ganho, recuperação, cancelamento e contratos; voz nativa permanece experimental e desabilitada por padrão no Windows x64.
+
 ## 0.4.8
 
 - Adiciona voz nativa experimental no Windows x64, desabilitada por padrão e habilitável nas configurações de voz fora da chamada, com interface web e servidor compatíveis.

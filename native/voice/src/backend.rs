@@ -12,6 +12,8 @@ pub struct Backend {
     send: Send,
     poll: Poll,
     destroy: Destroy,
+    supports_rnnoise: bool,
+    supports_quality: bool,
     _library: Library,
 }
 // SAFETY: version 1 explicitly guarantees thread-safe submit/poll. The owning
@@ -37,6 +39,12 @@ impl Backend {
             if version() != VERSION {
                 return Err("incompatible backend".into());
             }
+            // Optional v1 addition: a fresh helper can load an older packaged
+            // backend without advertising a filter it cannot actually run.
+            let capabilities = library
+                .get::<unsafe extern "C" fn() -> u32>(b"cuescord_voice_capabilities\0")
+                .map(|capabilities| capabilities())
+                .unwrap_or(0);
             let create =
                 library.get::<unsafe extern "C" fn() -> *mut c_void>(b"cuescord_voice_create\0")?;
             let send = *library.get::<Send>(b"cuescord_voice_send\0")?;
@@ -48,12 +56,20 @@ impl Backend {
                 send,
                 poll,
                 destroy,
+                supports_rnnoise: capabilities & 1 != 0,
+                supports_quality: capabilities & 2 != 0,
                 _library: library,
             })
         }
     }
     pub fn submit(&self, bytes: &[u8]) -> bool {
         unsafe { (self.send)(self.handle.as_ptr(), bytes.as_ptr(), bytes.len()) == 0 }
+    }
+    pub fn supports_rnnoise(&self) -> bool {
+        self.supports_rnnoise
+    }
+    pub fn supports_quality(&self) -> bool {
+        self.supports_quality
     }
     pub fn poll(&self, bytes: &mut [u8]) -> usize {
         unsafe { (self.poll)(self.handle.as_ptr(), bytes.as_mut_ptr(), bytes.len()) }

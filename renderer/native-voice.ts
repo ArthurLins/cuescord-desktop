@@ -1,11 +1,21 @@
+import {
+  recoverVoiceTransport,
+  voiceRecoveryGraceMs,
+  voiceRecoveryTimeoutMs,
+  type RecoverableTransport,
+} from './voice-transport-recovery';
+
 /** Public voice-only protocol. The renderer owns authenticated signaling; the
- * native helper owns devices, processing, RTP and playback. Never send tokens. */
+ * native helper owns devices, processing, RTP and playback. Never send account
+ * tokens or cookies; ICE relay credentials belong to the transport contract. */
 export interface NativeVoiceStatus {
   protocol: 1;
   available: boolean;
   enabled: boolean;
   active: boolean;
   engine: string;
+  noiseSuppressionModes?: Array<'native' | 'rnnoise'>;
+  voiceQualityProtocol?: number;
 }
 export interface VoiceControls {
   audioInputId?: string;
@@ -18,14 +28,24 @@ export interface VoiceControls {
   echoCancellation?: boolean;
   autoGainControl?: boolean;
   noiseSuppression?: boolean;
+  noiseSuppressionMode?: 'native' | 'rnnoise';
+  voiceBoost?: boolean;
   muted?: boolean;
   deafened?: boolean;
   ptt?: boolean;
   volumes?: Record<string, number>;
 }
+export type NativeNoiseStatus = 'off' | 'native' | 'loading' | 'rnnoise' | 'fallback';
 export interface NativeVoiceEvent {
   sessionId: string;
-  type: 'signal' | 'meter' | 'transport-state' | 'stopped' | 'health';
+  type:
+    | 'signal'
+    | 'meter'
+    | 'transport-state'
+    | 'stopped'
+    | 'health'
+    | 'processing-state'
+    | 'quality';
   requestId?: number;
   method?: string;
   data?: Record<string, unknown>;
@@ -34,8 +54,11 @@ export interface NativeVoiceEvent {
   transmitting?: boolean;
   captureFrames?: number;
   transportId?: string;
+  direction?: 'send' | 'recv';
   state?: string;
   reason?: string;
+  noiseProcessorStatus?: NativeNoiseStatus;
+  noiseSuppressionEffective?: boolean;
 }
 export interface NativeVoiceBridge {
   status(): Promise<NativeVoiceStatus>;
@@ -52,6 +75,35 @@ export interface NativeVoiceStats {
   inputLevel: number;
   powerProtection: boolean;
   engine: string;
+  noiseSuppressionMode?: 'native' | 'rnnoise';
+  noiseProcessorStatus?: NativeNoiseStatus;
+  noiseModel?: string;
+  webrtcNoiseSuppression?: boolean;
+  noiseFrames?: number;
+  noiseProcessingAverageMs?: number;
+  noiseProcessingMaxMs?: number;
+  roomAudioBitrate?: number;
+  microphoneEncodingBitrate?: number;
+  microphoneAdaptivePtime?: boolean;
+  microphoneBitratePriority?: number;
+  captureMmcss?: boolean;
+  renderMmcss?: boolean;
+  captureMmcssInherited?: boolean;
+  renderMmcssInherited?: boolean;
+  capturePriorityError?: number;
+  renderPriorityError?: number;
+  captureLateFrames?: number;
+  captureMaxGapMs?: number;
+  limitedCaptureFrames?: number;
+  limitedRenderFrames?: number;
+  captureLimiterGain?: number;
+  renderLimiterGain?: number;
+  voiceBoost?: boolean;
+  captureRecoveries?: number;
+  autoGainActive?: boolean;
+  autoGainErrors?: number;
+  autoGainFrames?: number;
+  receiverRecoveries?: number;
 }
 /** Prefix identifiers so native audio reports and browser video reports can be
  * sampled together without collisions. Existing samplers redact these IDs. */
@@ -79,6 +131,26 @@ export function getNativeVoiceBridge(): NativeVoiceBridge | undefined {
   return (window as Window & { __CUESCORD_DESKTOP__?: { nativeVoice?: NativeVoiceBridge } })
     .__CUESCORD_DESKTOP__?.nativeVoice;
 }
+/** Adapts helper events to the browser transport recovery contract. */
+class NativeTransport implements RecoverableTransport {
+  connectionState = 'new';
+  closed = false;
+  private listeners = new Set<(state: string) => void>();
+  on(_event: 'connectionstatechange', listener: (state: string) => void) {
+    this.listeners.add(listener);
+  }
+  off(_event: 'connectionstatechange', listener: (state: string) => void) {
+    this.listeners.delete(listener);
+  }
+  change(state: string) {
+    this.connectionState = state === 'completed' ? 'connected' : state;
+    for (const listener of this.listeners) listener(this.connectionState);
+  }
+  dispose() {
+    this.closed = true;
+    this.listeners.clear();
+  }
+}
 export class NativeVoiceSession {
   readonly consumers = new Map<string, string>();
   producer?: { id: string; closed: boolean; pause(): void; resume(): void };
@@ -86,7 +158,7 @@ export class NativeVoiceSession {
   private unsubscribe: () => void;
   private closed = false;
   private transports = new Map<string, 'send' | 'recv'>();
-  private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private transportRecovery = new Map<string, { transport: NativeTransport; stop(): void }>();
   private failed = false;
   private controls: VoiceControls = {};
   private connectionWaiters = new Map<
@@ -94,6 +166,7 @@ export class NativeVoiceSession {
     { resolve(): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
   >();
   private connected = new Set<string>();
+  private established = new Set<string>();
   private constructor(
     private bridge: NativeVoiceBridge,
     readonly sessionId: string,
@@ -101,32 +174,35 @@ export class NativeVoiceSession {
     private signaling: <T>(method: string, data: object) => Promise<T>,
     private onMeter: (event: NativeVoiceEvent) => void,
     private onFailure: () => void,
+    readonly supportsRnnoise: boolean,
+    readonly supportsQuality: boolean,
   ) {
     this.unsubscribe = bridge.subscribe((event) => {
       if (this.closed || event.sessionId !== sessionId || signal.aborted) return;
       if (event.type === 'signal') void this.reply(event);
-      else if (event.type === 'meter') onMeter(event);
+      else if (
+        event.type === 'meter' ||
+        event.type === 'processing-state' ||
+        event.type === 'quality'
+      )
+        onMeter(event);
       else if (event.type === 'stopped' || event.type === 'health') this.fail();
       else if (event.type === 'transport-state') {
         const id = event.transportId!;
+        const recovery = this.transportRecovery.get(id);
+        if (!recovery || !event.state) return;
         if (event.state === 'connected' || event.state === 'completed') {
           this.connected.add(id);
+          this.established.add(id);
           const waiting = this.connectionWaiters.get(id);
           if (waiting) {
             clearTimeout(waiting.timer);
             waiting.resolve();
             this.connectionWaiters.delete(id);
           }
-          clearTimeout(this.disconnectTimers.get(id));
-          this.disconnectTimers.delete(id);
-        } else if (event.state === 'failed' || event.state === 'closed') this.fail();
-        else if (event.state === 'disconnected' && !this.disconnectTimers.has(id)) {
-          this.connected.delete(id);
-          this.disconnectTimers.set(
-            id,
-            setTimeout(() => this.fail(), 5000),
-          );
-        }
+        } else this.connected.delete(id);
+        onMeter({ ...event, direction: this.transports.get(id) });
+        recovery.transport.change(event.state);
       }
     });
     signal.addEventListener('abort', this.close, { once: true });
@@ -145,7 +221,16 @@ export class NativeVoiceSession {
       await bridge.close(ready.sessionId);
       signal.throwIfAborted();
     }
-    return new NativeVoiceSession(bridge, ready.sessionId, signal, signaling, onMeter, onFailure);
+    return new NativeVoiceSession(
+      bridge,
+      ready.sessionId,
+      signal,
+      signaling,
+      onMeter,
+      onFailure,
+      ready.noiseSuppressionModes?.includes('rnnoise') === true,
+      ready.voiceQualityProtocol === 1,
+    );
   }
   private fail() {
     if (this.closed || this.failed || this.signal.aborted) return;
@@ -154,12 +239,48 @@ export class NativeVoiceSession {
     this.onFailure();
   }
   private async reply(event: NativeVoiceEvent) {
-    if (!['connect-transport', 'produce'].includes(event.method ?? '')) {
+    if (
+      !['connect-transport', 'produce', 'repair-consumer', 'resume-consumer'].includes(
+        event.method ?? '',
+      )
+    ) {
       this.fail();
       return;
     }
     try {
-      const result = await this.signaling(event.method!, event.data ?? {});
+      let result: unknown;
+      if (event.method === 'repair-consumer') {
+        const producerId = event.data?.producerId;
+        if (typeof producerId !== 'string') throw new Error('Unknown native producer');
+        const oldId = this.consumers.get(producerId);
+        if (!this.supportsQuality || !oldId || !this.receiveTransportId)
+          throw new Error('Unknown native consumer');
+        await this.signaling('close-consumer', { consumerId: oldId });
+        this.signal.throwIfAborted();
+        const response = await this.signaling<{
+          consumer: { id: string; producerId: string; kind: string; rtpParameters: unknown };
+        }>('consume', {
+          producerId,
+          transportId: this.receiveTransportId,
+          rtpCapabilities: this.rtpCapabilities,
+        });
+        if (
+          this.closed ||
+          this.consumers.get(producerId) !== oldId ||
+          response.consumer.kind !== 'audio' ||
+          response.consumer.producerId !== producerId
+        )
+          throw new Error('Native consumer no longer active');
+        this.consumers.set(producerId, response.consumer.id);
+        result = response.consumer;
+      } else if (event.method === 'resume-consumer') {
+        if (
+          !this.supportsQuality ||
+          ![...this.consumers.values()].includes(String(event.data?.consumerId))
+        )
+          throw new Error('Unknown native consumer');
+        result = await this.signaling(event.method, event.data ?? {});
+      } else result = await this.signaling(event.method!, event.data ?? {});
       await this.command('reply', { requestId: event.requestId, result });
     } catch {
       if (!this.closed)
@@ -178,7 +299,7 @@ export class NativeVoiceSession {
   async initialize(rtpCapabilities: unknown, iceServers: unknown[], controls: VoiceControls) {
     const loaded = await this.command<{ rtpCapabilities: unknown }>('load', { rtpCapabilities });
     this.rtpCapabilities = loaded.rtpCapabilities;
-    await this.command('configure', controls);
+    await this.configure(controls);
     // Same signaling commands as the browser. Purpose adds a bounded audio-only
     // pair; authorization, participant identity and mute events stay shared.
     const [send, recv] = await Promise.all(
@@ -193,11 +314,55 @@ export class NativeVoiceSession {
       ['send', send],
       ['recv', recv],
     ] as const) {
-      await this.command('transport', { direction, params: response.params, iceServers });
       this.transports.set(response.params.id, direction);
+      const transport = new NativeTransport();
+      const stop = recoverVoiceTransport(
+        transport,
+        this.signal,
+        () => this.restartTransport(response.params.id, direction),
+        () => this.fail(),
+      );
+      this.transportRecovery.set(response.params.id, { transport, stop });
+      await this.command('transport', { direction, params: response.params, iceServers });
+    }
+  }
+  private async restartTransport(transportId: string, direction: 'send' | 'recv') {
+    const quality = (reason: string) => {
+      if (!this.closed && !this.signal.aborted)
+        this.onMeter({
+          sessionId: this.sessionId,
+          type: 'quality',
+          reason,
+          transportId,
+          direction,
+        });
+    };
+    quality('ice-restart-started');
+    try {
+      const next = await this.signaling<{ iceServers: unknown[] }>('ice-config', {});
+      await this.command('ice-servers', { direction, iceServers: next.iceServers });
+      if (this.closed || this.signal.aborted) return;
+      const { iceParameters } = await this.signaling<{ iceParameters: unknown }>('restart-ice', {
+        transportId,
+      });
+      await this.command('restart-ice', { direction, iceParameters });
+      quality('ice-restart-finished');
+    } catch (error) {
+      quality('ice-restart-failed');
+      throw error;
     }
   }
   configure(controls: VoiceControls) {
+    // 0.4.8 and earlier reject unknown configure keys. A newer web must remain
+    // compatible with those desktops until their signed update is installed.
+    if (!this.supportsRnnoise) {
+      controls = { ...controls };
+      delete controls.noiseSuppressionMode;
+    }
+    if (!this.supportsQuality) {
+      controls = { ...controls };
+      delete controls.voiceBoost;
+    }
     const changed = Object.fromEntries(
       Object.entries(controls).filter(
         ([key, value]) =>
@@ -224,6 +389,11 @@ export class NativeVoiceSession {
     await this.waitForConnection(send);
     return this.producer;
   }
+  async setBitrate(bitrate: number) {
+    if (!this.supportsQuality) return false;
+    await this.command('set-bitrate', { bitrate });
+    return true;
+  }
   async consume(params: { id: string; producerId: string; kind: string; rtpParameters: unknown }) {
     if (params.kind !== 'audio') throw new Error('Native voice accepts audio only');
     await this.command('consume', params);
@@ -248,11 +418,14 @@ export class NativeVoiceSession {
     const existing = this.connectionWaiters.get(id);
     if (existing) return this.connectionPromises.get(id)!;
     const promise = new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.connectionWaiters.delete(id);
-        reject(new Error('Native voice connection timed out'));
-        this.fail();
-      }, 12000);
+      const timer = setTimeout(
+        () => {
+          this.connectionWaiters.delete(id);
+          reject(new Error('Native voice connection timed out'));
+          this.fail();
+        },
+        this.established.has(id) ? voiceRecoveryGraceMs + voiceRecoveryTimeoutMs : 12000,
+      );
       this.connectionWaiters.set(id, { resolve, reject, timer });
     });
     this.connectionPromises.set(id, promise);
@@ -267,8 +440,12 @@ export class NativeVoiceSession {
     this.closed = true;
     this.signal.removeEventListener('abort', this.close);
     this.unsubscribe();
-    for (const timer of this.disconnectTimers.values()) clearTimeout(timer);
-    this.disconnectTimers.clear();
+    for (const { transport, stop } of this.transportRecovery.values()) {
+      stop();
+      transport.dispose();
+    }
+    this.transportRecovery.clear();
+    this.transports.clear();
     this.consumers.clear();
     for (const waiting of this.connectionWaiters.values()) {
       clearTimeout(waiting.timer);
@@ -277,6 +454,7 @@ export class NativeVoiceSession {
     this.connectionWaiters.clear();
     this.connectionPromises.clear();
     this.connected.clear();
+    this.established.clear();
     if (this.producer) this.producer.closed = true;
     void this.bridge.close(this.sessionId).catch(() => undefined);
   };

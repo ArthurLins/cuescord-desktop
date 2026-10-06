@@ -1,6 +1,6 @@
 {
   "name": "@cuescord/desktop",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -31,7 +31,7 @@
     "desktop:build:linux": "node scripts/build.mjs && electron-builder --config electron-builder.cjs --linux deb --x64 --publish never",
     "desktop:build:mac": "node scripts/build.mjs && electron-builder --config electron-builder.cjs --mac dmg --arm64 --publish never",
     "desktop:check": "node scripts/check.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:ui": "playwright test",
     "format": "prettier --write \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\"",
     "format:check": "prettier --check \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\"",

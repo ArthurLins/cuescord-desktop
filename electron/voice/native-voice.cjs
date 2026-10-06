@@ -30,6 +30,10 @@ function installNativeVoice({
   let enabled = false,
     session,
     nextId = 0;
+  let noiseSuppressionModes = filesExist(path.join(folder, 'RNNOISE_NOTICES.txt'))
+    ? ['native', 'rnnoise']
+    : ['native'];
+  let voiceQualityProtocol = filesExist(path.join(folder, 'capabilities.json')) ? 1 : 0;
   try {
     enabled = JSON.parse(readFileSync(preferenceFile, 'utf8')).enabled === true;
   } catch {
@@ -48,6 +52,8 @@ function installNativeVoice({
     enabled,
     active: Boolean(session),
     engine: 'libwebrtc-m140',
+    noiseSuppressionModes,
+    voiceQualityProtocol,
   });
   function stop(reason = 'closed') {
     const previous = session;
@@ -128,6 +134,12 @@ function installNativeVoice({
             return;
           }
           current.ready = true;
+          voiceQualityProtocol = event.voiceQualityProtocol === 1 ? 1 : 0;
+          noiseSuppressionModes =
+            Array.isArray(event.noiseSuppressionModes) &&
+            event.noiseSuppressionModes.includes('rnnoise')
+              ? ['native', 'rnnoise']
+              : ['native'];
           clearTimeout(current.readyTimer);
           readyResolve({ sessionId: current.id, ...status() });
         } else if (!current.ready || event.type === 'fatal') {
@@ -140,7 +152,11 @@ function installNativeVoice({
           clearTimeout(pending.timer);
           if (event.error) pending.reject(new Error('Native voice operation failed'));
           else pending.resolve(event.data);
-        } else if (['meter', 'signal', 'transport-state', 'health'].includes(event.type)) {
+        } else if (
+          ['meter', 'signal', 'transport-state', 'health', 'processing-state', 'quality'].includes(
+            event.type,
+          )
+        ) {
           contents.send('cuescord:voice:event', { ...event, sessionId: current.id });
         } else {
           stop('protocol-error');

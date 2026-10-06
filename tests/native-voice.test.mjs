@@ -16,6 +16,8 @@ test('voice controls preserve units and reject malformed or excessive input', ()
       muted: true,
       inputMode: 'push-to-talk',
       inputVolume: 200,
+      noiseSuppressionMode: 'rnnoise',
+      voiceBoost: true,
       volumes: { peer: 0.5 },
     }),
     true,
@@ -25,11 +27,18 @@ test('voice controls preserve units and reject malformed or excessive input', ()
     { activationThreshold: NaN },
     { outputVolume: 201 },
     { inputMode: 'always' },
+    { noiseSuppressionMode: 'unknown' },
+    { noiseSuppressionMode: true },
+    { voiceBoost: 'true' },
     { volumes: { peer: -1 } },
     { shell: 'cmd' },
   ])
     assert.equal(validCommand('configure', data), false);
   assert.equal(validCommand('exec', {}), false);
+  for (const bitrate of [32000, 64000, 96000, 128000, 256000])
+    assert.equal(validCommand('set-bitrate', { bitrate }), true);
+  for (const bitrate of [0, 510000, NaN, '64000'])
+    assert.equal(validCommand('set-bitrate', { bitrate }), false);
   assert.equal(validCommand('load', { blob: 'x'.repeat(MAX_MESSAGE) }), false);
 });
 test(
@@ -67,9 +76,26 @@ test(
         spawnHelper: () => child,
       });
       try {
+        assert.deepEqual(invoke('status').noiseSuppressionModes, ['native', 'rnnoise']);
         const opening = invoke('open');
-        child.stdout.write(JSON.stringify({ type: 'ready', protocol: 1, media: ['voice'] }) + '\n');
+        const modern = cause === 'timeout';
+        child.stdout.write(
+          JSON.stringify({
+            type: 'ready',
+            protocol: 1,
+            media: ['voice'],
+            ...(modern ? { noiseSuppressionModes: ['native', 'rnnoise'] } : {}),
+          }) + '\n',
+        );
         const ready = await opening;
+        assert.deepEqual(ready.noiseSuppressionModes, modern ? ['native', 'rnnoise'] : ['native']);
+        assert.deepEqual(invoke('status').noiseSuppressionModes, ready.noiseSuppressionModes);
+        if (modern) {
+          child.stdout.write(
+            JSON.stringify({ type: 'processing-state', noiseProcessorStatus: 'fallback' }) + '\n',
+          );
+          assert.equal(child.killed, false, 'a filter fallback must keep capture alive');
+        }
         assert.equal(invoke('status').active, true);
         await assert.rejects(invoke('open'), /already active/);
         const pending = invoke('request', {

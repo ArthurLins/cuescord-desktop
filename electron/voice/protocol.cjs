@@ -11,6 +11,7 @@ const METHODS = new Set([
   'stats',
   'restart-ice',
   'ice-servers',
+  'set-bitrate',
   'reply',
 ]);
 const CONFIG_KEYS = new Set([
@@ -24,6 +25,8 @@ const CONFIG_KEYS = new Set([
   'echoCancellation',
   'autoGainControl',
   'noiseSuppression',
+  'noiseSuppressionMode',
+  'voiceBoost',
   'muted',
   'deafened',
   'ptt',
@@ -48,6 +51,7 @@ function validCommand(method, data) {
           'echoCancellation',
           'autoGainControl',
           'noiseSuppression',
+          'voiceBoost',
         ].includes(key) &&
         typeof value !== 'boolean'
       )
@@ -59,6 +63,7 @@ function validCommand(method, data) {
         return false;
       if (key === 'inputMode' && !['voice-activity', 'push-to-talk'].includes(value)) return false;
       if (key === 'activationMode' && !['automatic', 'manual'].includes(value)) return false;
+      if (key === 'noiseSuppressionMode' && !['native', 'rnnoise'].includes(value)) return false;
       if (
         ['activationThreshold', 'inputVolume', 'outputVolume'].includes(key) &&
         (!Number.isFinite(value) ||
@@ -80,6 +85,8 @@ function validCommand(method, data) {
         return false;
     }
   }
+  if (method === 'set-bitrate' && ![32000, 64000, 96000, 128000, 256000].includes(data.bitrate))
+    return false;
   return true;
 }
 module.exports = { VERSION, MAX_MESSAGE, validCommand };

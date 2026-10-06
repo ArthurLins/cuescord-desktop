@@ -10,7 +10,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 // the experimental capability. This build never downloads code at app runtime.
 if (process.platform !== 'win32' || process.arch !== 'x64') process.exit(0);
 const cache = path.join(root, '.cache/native-voice');
-const output = path.join(cache, 'bin');
+const output = path.resolve(
+  root,
+  process.env.CUESCORD_NATIVE_BUILD_OUTPUT || path.join(cache, 'bin'),
+);
 await mkdir(output, { recursive: true });
 async function archive(name, url, sha256) {
   const destination = path.join(cache, name);
@@ -93,10 +96,14 @@ run(cmake, [
   '--target',
   'CuescordVoiceBackend',
   'VoiceGateTests',
+  'VoiceNoiseTests',
+  'VoiceQualityTests',
   '--parallel',
   '4',
 ]);
 run(path.join(build, 'Release/VoiceGateTests.exe'), []);
+run(path.join(build, 'Release/VoiceNoiseTests.exe'), []);
+run(path.join(build, 'Release/VoiceQualityTests.exe'), []);
 const env = {
   ...process.env,
   CARGO_HOME: path.join(root, '.cache/cargo'),
@@ -124,6 +131,32 @@ await copyFile(
   path.join(output, 'cuescord-voice.exe'),
 );
 await copyFile(path.join(cache, 'NOTICE'), path.join(output, 'WEBRTC_NOTICES.txt'));
+// Include the upstream notices for each compiled RNNoise source, including the
+// CPU kernels. The model is compiled into the backend; no separate runtime file.
+const noiseSource = path.join(build, '_deps/rnnoise-src');
+const noiseNotices = [await readFile(path.join(noiseSource, 'COPYING'), 'utf8')];
+for (const name of [
+  'denoise.c',
+  'rnn.c',
+  'pitch.c',
+  'kiss_fft.c',
+  'celt_lpc.c',
+  'nnet.c',
+  'nnet_default.c',
+  'parse_lpcnet_weights.c',
+  'rnnoise_tables.c',
+  'x86/nnet_sse4_1.c',
+  'x86/nnet_avx2.c',
+  'x86/x86_dnn_map.c',
+]) {
+  const source = await readFile(path.join(noiseSource, 'src', name), 'utf8');
+  noiseNotices.push(`${name}\n${source.slice(0, source.indexOf('#'))}`);
+}
+await writeFile(path.join(output, 'RNNOISE_NOTICES.txt'), noiseNotices.join('\n\n'));
+await writeFile(
+  path.join(output, 'capabilities.json'),
+  JSON.stringify({ protocol: 1, voiceQualityProtocol: 1 }),
+);
 await copyFile(
   path.join(root, 'native/voice/THIRD_PARTY_NOTICES.txt'),
   path.join(output, 'THIRD_PARTY_NOTICES.txt'),

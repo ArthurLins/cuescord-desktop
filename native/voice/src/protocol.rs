@@ -18,6 +18,7 @@ pub enum Method {
     Stats,
     RestartIce,
     IceServers,
+    SetBitrate,
     Reply,
     Stop,
 }

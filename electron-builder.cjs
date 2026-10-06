@@ -34,7 +34,12 @@ module.exports = {
       {
         from: '.cache/native-voice/bin',
         to: 'native-voice',
-        filter: ['cuescord-voice.exe', 'CuescordVoiceBackend.dll', '*NOTICES.txt'],
+        filter: [
+          'cuescord-voice.exe',
+          'CuescordVoiceBackend.dll',
+          '*NOTICES.txt',
+          'capabilities.json',
+        ],
       },
     ],
   },
