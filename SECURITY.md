@@ -41,11 +41,13 @@ de áudio ou tela. Outros arquivos locais e subframes não podem usar esses cont
 
 ## Rede e dados locais
 
-A voz nativa experimental usa uma sessão restrita ao frame principal confiável,
-com preferência local inicialmente desabilitada. O helper Rust e a DLL WebRTC
+A voz nativa é automática no Windows x64 e usa uma sessão restrita ao frame
+principal confiável. A seleção do motor não inicia captura por conta própria.
+O helper Rust e a DLL WebRTC
 são caminhos fixos do pacote; não aceitam código, caminhos, shell ou tokens de
 autenticação da página. Só processam voz. As filas e mensagens têm limites e
-prazos. Saída, navegação, falha ou timeout encerram o processo e liberam dispositivos.
+prazos. Saída, navegação, falha ou timeout de mídia/controle encerram o processo
+e liberam dispositivos; timeout de estatísticas/dispositivos rejeita apenas a consulta.
 Não há gravação ou download de dependências durante a chamada. PCM não passa
 pelo renderer nesse caminho. Veja [docs/NATIVE-VOICE.md](docs/NATIVE-VOICE.md).
 

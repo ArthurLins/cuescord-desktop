@@ -96,6 +96,7 @@ function setup(platform = 'win32') {
     window,
     contents,
     tray,
+    presence,
     calls,
     handler,
     quitCount: () => quitCount,
@@ -214,6 +215,30 @@ test('Windows session shutdown bypasses close to tray', () => {
   window.emit('session-end');
   window.emit('close', { preventDefault: () => calls.push('prevent') });
   assert.deepEqual(calls, []);
+});
+
+test('native helper keeps signaling responsive before presence arrives and cannot override an active call', () => {
+  const { presence, handler, event, calls } = setup();
+  presence.setNativeVoiceActive(true);
+  handler(event, { unreadCount: 1, inCall: false, microphoneMuted: false });
+  assert.deepEqual(
+    calls.filter((call) => call[0] === 'throttle'),
+    [['throttle', false]],
+  );
+  handler(event, { unreadCount: 1, inCall: true, microphoneMuted: true });
+  presence.setNativeVoiceActive(false);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === 'throttle'),
+    [['throttle', false]],
+  );
+  handler(event, { unreadCount: 1, inCall: false, microphoneMuted: true });
+  assert.deepEqual(
+    calls.filter((call) => call[0] === 'throttle'),
+    [
+      ['throttle', false],
+      ['throttle', true],
+    ],
+  );
 });
 
 test('other platforms never invoke Windows overlay APIs', () => {

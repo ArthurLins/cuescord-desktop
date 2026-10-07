@@ -16,6 +16,7 @@ export interface NativeVoiceStatus {
   engine: string;
   noiseSuppressionModes?: Array<'native' | 'rnnoise'>;
   voiceQualityProtocol?: number;
+  lastStopReason?: string;
 }
 export interface VoiceControls {
   audioInputId?: string;
@@ -64,9 +65,15 @@ export interface NativeVoiceBridge {
   status(): Promise<NativeVoiceStatus>;
   setEnabled(enabled: boolean): Promise<NativeVoiceStatus>;
   open(): Promise<NativeVoiceStatus & { sessionId: string }>;
+  devices?(): Promise<NativeVoiceDevice[]>;
   request<T>(sessionId: string, method: string, data?: object): Promise<T>;
   close(sessionId: string): Promise<void>;
   subscribe(listener: (event: NativeVoiceEvent) => void): () => void;
+}
+export interface NativeVoiceDevice {
+  deviceId: string;
+  kind: 'audioinput' | 'audiooutput';
+  label: string;
 }
 export interface NativeVoiceStats {
   send: Array<Record<string, unknown> & { id: string }>;
@@ -131,6 +138,29 @@ export function getNativeVoiceBridge(): NativeVoiceBridge | undefined {
   return (window as Window & { __CUESCORD_DESKTOP__?: { nativeVoice?: NativeVoiceBridge } })
     .__CUESCORD_DESKTOP__?.nativeVoice;
 }
+/** Enable older Windows desktops that still persist an experimental opt-out. */
+export async function getPreferredNativeVoiceStatus() {
+  const bridge = getNativeVoiceBridge();
+  const status = await bridge?.status();
+  return status?.available && !status.enabled ? bridge!.setEnabled(true) : status;
+}
+const deviceRequests = new WeakMap<NativeVoiceBridge, Promise<NativeVoiceDevice[]>>();
+/** Old bridges need a temporary helper; serialize it with call startup. */
+export function enumerateNativeVoiceDevices(bridge: NativeVoiceBridge) {
+  const pending = deviceRequests.get(bridge);
+  if (pending) return pending;
+  const request = (async () => {
+    if (bridge.devices) return bridge.devices();
+    const ready = await bridge.open();
+    try {
+      return await bridge.request<NativeVoiceDevice[]>(ready.sessionId, 'devices');
+    } finally {
+      await bridge.close(ready.sessionId);
+    }
+  })().finally(() => deviceRequests.delete(bridge));
+  deviceRequests.set(bridge, request);
+  return request;
+}
 /** Adapts helper events to the browser transport recovery contract. */
 class NativeTransport implements RecoverableTransport {
   connectionState = 'new';
@@ -173,9 +203,10 @@ export class NativeVoiceSession {
     private signal: AbortSignal,
     private signaling: <T>(method: string, data: object) => Promise<T>,
     private onMeter: (event: NativeVoiceEvent) => void,
-    private onFailure: () => void,
+    private onFailure: (reason: string) => void,
     readonly supportsRnnoise: boolean,
     readonly supportsQuality: boolean,
+    readonly engine: string,
   ) {
     this.unsubscribe = bridge.subscribe((event) => {
       if (this.closed || event.sessionId !== sessionId || signal.aborted) return;
@@ -186,7 +217,8 @@ export class NativeVoiceSession {
         event.type === 'quality'
       )
         onMeter(event);
-      else if (event.type === 'stopped' || event.type === 'health') this.fail();
+      else if (event.type === 'stopped' || event.type === 'health')
+        this.fail(event.reason ?? event.type);
       else if (event.type === 'transport-state') {
         const id = event.transportId!;
         const recovery = this.transportRecovery.get(id);
@@ -211,10 +243,13 @@ export class NativeVoiceSession {
     signal: AbortSignal,
     signaling: <T>(method: string, data: object) => Promise<T>,
     onMeter: (event: NativeVoiceEvent) => void,
-    onFailure: () => void,
+    onFailure: (reason: string) => void,
   ) {
     const bridge = getNativeVoiceBridge();
     if (!bridge) throw new Error('Native voice unavailable');
+    signal.throwIfAborted();
+    const pendingDevices = deviceRequests.get(bridge);
+    if (pendingDevices) await pendingDevices.catch(() => undefined);
     signal.throwIfAborted();
     const ready = await bridge.open();
     if (signal.aborted) {
@@ -230,13 +265,14 @@ export class NativeVoiceSession {
       onFailure,
       ready.noiseSuppressionModes?.includes('rnnoise') === true,
       ready.voiceQualityProtocol === 1,
+      ready.engine,
     );
   }
-  private fail() {
+  private fail(reason = 'media-operation-failed') {
     if (this.closed || this.failed || this.signal.aborted) return;
     this.failed = true;
     this.close();
-    this.onFailure();
+    this.onFailure(reason);
   }
   private async reply(event: NativeVoiceEvent) {
     if (
@@ -292,7 +328,12 @@ export class NativeVoiceSession {
   command<T>(method: string, data: object = {}): Promise<T> {
     if (this.closed || this.signal.aborted) return Promise.reject(new Error('Native voice closed'));
     return this.bridge.request<T>(this.sessionId, method, data).catch((error) => {
-      if (method !== 'stats' && method !== 'devices') this.fail();
+      if (method !== 'stats' && method !== 'devices')
+        this.fail(
+          error instanceof Error
+            ? /Native voice closed \(([-a-z]+)\)/.exec(error.message)?.[1]
+            : undefined,
+        );
       throw error;
     });
   }

@@ -42,8 +42,8 @@ da plataforma nem o serviço de produção. As ações são fixadas por commit.
 No Windows, o workflow seleciona Rust 1.94.0. O build do instalador compila o
 helper de voz Rust e seu backend C++ com WebRTC/libmediasoupclient fixados por
 SHA-256, executa os testes C++/Rust e inclui os dois binários e avisos fora do ASAR.
-Falha no build nativo impede empacotar Windows. O recurso permanece desabilitado
-por padrão; sua disponibilidade não ativa o microfone. Veja [NATIVE-VOICE.md](NATIVE-VOICE.md)
+Falha no build nativo impede empacotar Windows. O motor é selecionado automaticamente
+no Windows x64; sua disponibilidade não ativa o microfone. Veja [NATIVE-VOICE.md](NATIVE-VOICE.md)
 para contratos, dependências e aceite com jogo/app minimizado. Publicação requer
 também o aceite desse caminho quando houver alteração de voz nativa.
 

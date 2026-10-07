@@ -49,7 +49,15 @@ test(
       const temp = mkdtempSync(path.join(os.tmpdir(), 'cuescord-voice-life-'));
       writeFileSync(path.join(temp, 'native-voice.json'), JSON.stringify({ enabled: true }));
       const app = Object.assign(new EventEmitter(), { isPackaged: false, getPath: () => temp });
-      const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send() {} });
+      let throttling = true;
+      const contents = Object.assign(new EventEmitter(), {
+        isDestroyed: () => false,
+        send() {},
+        getBackgroundThrottling: () => throttling,
+        setBackgroundThrottling: (value) => {
+          throttling = value;
+        },
+      });
       const frame = { url: 'https://cuescord.cuesc.net/app', isDestroyed: () => false };
       contents.mainFrame = frame;
       const handlers = new Map();
@@ -97,11 +105,12 @@ test(
           assert.equal(child.killed, false, 'a filter fallback must keep capture alive');
         }
         assert.equal(invoke('status').active, true);
+        assert.equal(throttling, false, 'native signaling stays responsive in the background');
         await assert.rejects(invoke('open'), /already active/);
         const pending = invoke('request', {
           sessionId: ready.sessionId,
-          method: 'stats',
-          data: {},
+          method: 'configure',
+          data: { muted: true },
         });
         const rejected = assert.rejects(pending, /closed/);
         if (cause === 'crash') child.emit('exit', 1);
@@ -110,6 +119,11 @@ test(
         await rejected;
         assert.equal(child.killed, true);
         assert.equal(invoke('status').active, false);
+        assert.equal(throttling, true, 'closing restores the previous background policy');
+        assert.equal(
+          invoke('status').lastStopReason,
+          { crash: 'helper-exited', navigation: 'navigation', timeout: 'command-timeout' }[cause],
+        );
         assert.equal(invoke('status').enabled, true);
         await assert.rejects(
           invoke('request', {
@@ -126,7 +140,7 @@ test(
     }
   },
 );
-test('IPC defaults off and rejects subframes, foreign origins and stale sessions', async () => {
+test('unavailable voice rejects capture, subframes, foreign origins and stale sessions', async () => {
   const temp = mkdtempSync(path.join(os.tmpdir(), 'cuescord-native-voice-'));
   const app = Object.assign(new EventEmitter(), { isPackaged: false, getPath: () => temp });
   const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send() {} });
@@ -146,6 +160,7 @@ test('IPC defaults off and rejects subframes, foreign origins and stale sessions
     ipcMain,
     window,
     trustedUrl: mainFrame.url,
+    filesExist: () => false,
     spawnHelper: () => {
       spawned++;
       throw new Error('Unexpected capture');
@@ -172,3 +187,153 @@ test('IPC defaults off and rejects subframes, foreign origins and stale sessions
     rmSync(temp, { recursive: true, force: true });
   }
 });
+
+function nativeHarness(t, requestTimeoutMs = 1000) {
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'cuescord-voice-default-'));
+  // A saved opt-out from older releases must no longer disable Windows voice.
+  writeFileSync(path.join(temp, 'native-voice.json'), JSON.stringify({ enabled: false }));
+  const app = Object.assign(new EventEmitter(), { isPackaged: false, getPath: () => temp });
+  let throttling = true;
+  const events = [];
+  const contents = Object.assign(new EventEmitter(), {
+    isDestroyed: () => false,
+    send: (_channel, event) => events.push(event),
+    getBackgroundThrottling: () => throttling,
+    setBackgroundThrottling: (value) => {
+      throttling = value;
+    },
+  });
+  const frame = { url: 'https://cuescord.cuesc.net/app', isDestroyed: () => false };
+  contents.mainFrame = frame;
+  const handlers = new Map(),
+    children = [];
+  const { stop } = installNativeVoice({
+    app,
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler), removeHandler() {} },
+    window: { isDestroyed: () => false, webContents: contents },
+    trustedUrl: frame.url,
+    filesExist: () => true,
+    requestTimeoutMs,
+    spawnHelper: () => {
+      const child = Object.assign(new EventEmitter(), {
+        stdin: new PassThrough(),
+        stdout: new PassThrough(),
+        killed: false,
+        kill() {
+          this.killed = true;
+        },
+      });
+      children.push(child);
+      return child;
+    },
+  });
+  t.after(() => {
+    stop();
+    rmSync(temp, { recursive: true, force: true });
+  });
+  return {
+    children,
+    events,
+    contents,
+    frame,
+    invoke: (name, ...args) =>
+      handlers.get('cuescord:voice:' + name)({ sender: contents, senderFrame: frame }, ...args),
+    ready: (child = children.at(-1)) =>
+      child.stdout.write(JSON.stringify({ type: 'ready', protocol: 1, media: ['voice'] }) + '\n'),
+  };
+}
+
+test(
+  'Windows defaults to native voice without honoring old opt-out',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const h = nativeHarness(t);
+    assert.equal(h.invoke('status').enabled, true);
+    assert.equal(h.children.length, 0, 'a default does not itself capture audio');
+    assert.throws(() => h.invoke('enabled', false), /automatically/);
+    const opening = h.invoke('open');
+    h.ready();
+    const ready = await opening;
+    assert.equal(ready.active, true);
+    assert.equal(h.invoke('enabled', true).enabled, true);
+  },
+);
+
+test(
+  'late statistics and device replies do not revoke native voice',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const h = nativeHarness(t, 15);
+    const opening = h.invoke('open');
+    h.ready();
+    const ready = await opening;
+    for (const method of ['stats', 'devices']) {
+      await assert.rejects(
+        h.invoke('request', { sessionId: ready.sessionId, method, data: {} }),
+        /timed out/,
+      );
+      assert.equal(h.invoke('status').active, true);
+      assert.equal(h.children[0].killed, false);
+    }
+    assert.equal(h.events.length, 0);
+    const request = h.invoke('request', {
+      sessionId: ready.sessionId,
+      method: 'configure',
+      data: { muted: true },
+    });
+    h.children[0].stdout.write(JSON.stringify({ type: 'response', id: 1, data: {} }) + '\n');
+    h.children[0].stdout.write(JSON.stringify({ type: 'response', id: 3, data: {} }) + '\n');
+    await request;
+    assert.equal(h.invoke('status').active, true);
+  },
+);
+
+test(
+  'idle device enumeration shares one probe and finishes before a call starts',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const h = nativeHarness(t);
+    const devices = h.invoke('devices');
+    const concurrent = h.invoke('devices');
+    const opening = h.invoke('open');
+    assert.equal(h.children.length, 1);
+    h.ready();
+    await new Promise((resolve) => setImmediate(resolve));
+    const rows = [{ deviceId: 'default', kind: 'audioinput', label: 'Default' }];
+    h.children[0].stdout.write(JSON.stringify({ type: 'response', id: 1, data: rows }) + '\n');
+    assert.deepEqual(await devices, rows);
+    assert.deepEqual(await concurrent, rows);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.children[0].killed, true);
+    assert.equal(h.children.length, 2);
+    h.ready();
+    const ready = await opening;
+    const liveDevices = h.invoke('devices');
+    await new Promise((resolve) => setImmediate(resolve));
+    h.children[1].stdout.write(JSON.stringify({ type: 'response', id: 2, data: rows }) + '\n');
+    assert.deepEqual(await liveDevices, rows);
+    assert.equal(h.children.length, 2);
+    assert.equal(h.children[1].killed, false);
+    assert.equal(h.invoke('status').active, true);
+    assert.notEqual(
+      h.events[0].sessionId,
+      ready.sessionId,
+      'the probe cannot close the call session',
+    );
+  },
+);
+
+test(
+  'a call waiting for enumeration cannot reopen after navigation to another origin',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const h = nativeHarness(t);
+    const probe = assert.rejects(h.invoke('devices'), /closed/);
+    const call = assert.rejects(h.invoke('open'), /Untrusted/);
+    h.frame.url = 'https://example.org';
+    h.contents.emit('did-start-navigation', {}, h.frame.url, false, true);
+    await Promise.all([probe, call]);
+    assert.equal(h.children.length, 1);
+    assert.equal(h.children[0].killed, true);
+  },
+);

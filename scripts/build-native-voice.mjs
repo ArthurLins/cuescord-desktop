@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 // Windows first. Unsupported platforms keep browser voice and do not advertise
-// the experimental capability. This build never downloads code at app runtime.
+// native voice. This build never downloads code at app runtime.
 if (process.platform !== 'win32' || process.arch !== 'x64') process.exit(0);
 const cache = path.join(root, '.cache/native-voice');
 const output = path.resolve(

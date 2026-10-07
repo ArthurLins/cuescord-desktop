@@ -130,8 +130,8 @@ jobs:
           Assinatura de publicador/notarização dependem dos certificados configurados pelo mantenedor.
           Sem certificados, Windows não tem assinatura de publicador e macOS usa assinatura ad-hoc.
           macOS 13+ permite áudio do aplicativo escolhido ou do sistema, com seleção explícita e permissão de gravação de tela/áudio.
-          Windows x64 inclui voz nativa experimental, desabilitada por padrão e habilitável nas configurações de voz fora da chamada.
-          A opção exige interface web e servidor de voz compatíveis; servidores anteriores continuam usando a voz padrão.
+          Windows x64 usa voz nativa automaticamente, com recuperação antes do fallback para o navegador.
+          A voz nativa exige interface web e servidor de voz compatíveis; servidores anteriores continuam usando a voz padrão.
           A captura e reprodução de voz nativa usam WebRTC em um processo separado. Câmera e compartilhamento continuam no caminho atual.
           A interface é carregada do serviço remoto; este repositório contém o cliente desktop.
           EOF

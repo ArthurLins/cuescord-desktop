@@ -3,6 +3,7 @@ function createNativeVoiceBridge(ipcRenderer) {
     status: () => ipcRenderer.invoke('cuescord:voice:status'),
     setEnabled: (enabled) => ipcRenderer.invoke('cuescord:voice:enabled', enabled),
     open: () => ipcRenderer.invoke('cuescord:voice:open'),
+    devices: () => ipcRenderer.invoke('cuescord:voice:devices'),
     request: (sessionId, method, data = {}) =>
       ipcRenderer.invoke('cuescord:voice:request', { sessionId, method, data }),
     close: (sessionId) => ipcRenderer.invoke('cuescord:voice:close', sessionId),

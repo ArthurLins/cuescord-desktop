@@ -1,5 +1,12 @@
 # Changelog
 
+## Não publicado
+
+- Torna a voz nativa automática no Windows x64 e remove a opção experimental da interface compatível, com o motor atual nas estatísticas para nerds.
+- Serializa a consulta de dispositivos com a abertura da chamada e impede que timeouts de diagnóstico encerrem a captura.
+- Mantém a sinalização ativa na abertura e recuperação do helper, preservando o agendamento de chamadas em segundo plano.
+- Tenta reconstruir a sessão nativa antes do fallback web e registra os motivos de falha no diagnóstico local.
+
 ## 0.4.9
 
 - Adiciona RNNoise com modelo completo recente na voz nativa, preservando a escolha de filtro e mantendo AEC e AGC independentes, sem filtrar o áudio do compartilhamento.

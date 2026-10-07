@@ -30,6 +30,7 @@ function installDesktopPresence({
   platform = process.platform,
 }) {
   let quitting = false;
+  let nativeVoiceActive = false;
   let state = { unreadCount: 0, inCall: false, microphoneMuted: false };
   const normalIcon = nativeImage.createFromPath(iconPath);
   const callIcons = [false, true].map((muted) => nativeImage.createFromBuffer(callPng(muted)));
@@ -71,7 +72,7 @@ function installDesktopPresence({
     // A running audio context can still fall behind while the renderer is in
     // the background, especially under game load. Disable renderer background
     // throttling for calls, including muted calls, and restore it when idle.
-    const throttle = !state.inCall;
+    const throttle = !state.inCall && !nativeVoiceActive;
     if (window.webContents.getBackgroundThrottling() !== throttle)
       window.webContents.setBackgroundThrottling(throttle);
     if (platform === 'win32' || platform === 'linux') window.setIcon(icon);
@@ -132,7 +133,14 @@ function installDesktopPresence({
   });
   app.on('will-quit', () => tray.destroy());
   apply();
-  return { attach, show };
+  return {
+    attach,
+    show,
+    setNativeVoiceActive(active) {
+      nativeVoiceActive = active;
+      apply();
+    },
+  };
 }
 
 module.exports = { installDesktopPresence, validPresence };

@@ -3,7 +3,7 @@ name = "cuescord-voice"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Opt-in native voice process for Cuescord Desktop"
+description = "Windows native voice process for Cuescord Desktop"
 
 [dependencies]
 libloading = "=0.8.9"

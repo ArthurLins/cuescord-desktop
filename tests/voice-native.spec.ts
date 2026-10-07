@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { NativeVoiceBridge } from '../renderer/native-voice';
 
-test('real sandbox keeps native voice opt-in and revokes a helper on navigation', async ({}, testInfo) => {
+test('real sandbox selects native voice automatically and revokes a helper on navigation', async ({}, testInfo) => {
   test.setTimeout(30000);
   const server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html' });
@@ -29,27 +29,40 @@ test('real sandbox keeps native voice opt-in and revokes a helper on navigation'
         ).__CUESCORD_DESKTOP__.nativeVoice;
         return bridge.status();
       });
-    await expect.poll(async () => (await read()).enabled).toBe(false);
+    await expect
+      .poll(async () => {
+        const status = await read();
+        return status.enabled === status.available;
+      })
+      .toBe(true);
     await expect(page.frames()[1].evaluate(() => '__CUESCORD_DESKTOP__' in window)).resolves.toBe(
       false,
     );
-    const unavailable = await page.evaluate(async () => {
-      const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
-      try {
-        await bridge.open();
-        return false;
-      } catch {
-        return true;
-      }
-    });
-    expect(unavailable).toBe(true);
-    if (!(await read()).available) return; // Non-Windows and builds without the optional helper.
+    if (!(await read()).available) {
+      await expect(
+        page.evaluate(async () => {
+          const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
+          try {
+            await bridge.open();
+            return false;
+          } catch {
+            return true;
+          }
+        }),
+      ).resolves.toBe(true);
+      return;
+    }
     const id = await page.evaluate(async () => {
       const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
-      await bridge.setEnabled(true);
       return (await bridge.open()).sessionId;
     });
     expect((await read()).active).toBe(true);
+    expect(
+      await client.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.getBackgroundThrottling(),
+      ),
+    ).toBe(false);
+    await client.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
     // Enumeration initializes WASAPI but never starts recording or playback.
     const devices = await page.evaluate(async (sessionId) => {
       const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
@@ -59,6 +72,11 @@ test('real sandbox keeps native voice opt-in and revokes a helper on navigation'
     expect(devices).toBe(true);
     await page.reload();
     await expect.poll(async () => (await read()).active).toBe(false);
+    expect(
+      await client.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.getBackgroundThrottling(),
+      ),
+    ).toBe(true);
     expect((await read()).enabled).toBe(true);
     const staleDenied = await page.evaluate(async (sessionId) => {
       const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;

@@ -65,7 +65,13 @@ function createWindow(appSession) {
     },
   });
   mainWindow = win;
-  installNativeVoice({ app, ipcMain, window: win, trustedUrl });
+  installNativeVoice({
+    app,
+    ipcMain,
+    window: win,
+    trustedUrl,
+    onActiveChanged: (active) => desktopPresence.setNativeVoiceActive(active),
+  });
   desktopPresence.attach(win);
   const recovery = installPageRecovery({ window: win, trustedUrl, recoveryUrl });
   win.on('page-title-updated', (event) => event.preventDefault());

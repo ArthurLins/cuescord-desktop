@@ -1,8 +1,10 @@
-# Voz nativa experimental
+# Voz nativa no Windows
 
-**Voz nativa (experimental)** fica nas configurações de voz e começa desabilitada.
-Esta implementação atende Windows x64. Outros sistemas e desktops sem os binários
-usam voz web. A escolha é persistida no perfil desktop e só muda fora da chamada.
+A voz nativa é selecionada automaticamente no desktop Windows x64, sem opção
+experimental ou aviso de troca de motor. Preferências antigas de opt-out deixam
+de desabilitá-la; a web também ativa o motor nos desktops antigos que oferecem a
+ponte. Web, macOS, Linux e desktops sem os binários usam voz web. As estatísticas
+para nerds mostram o motor efetivamente usado na chamada.
 
 O processo Rust `cuescord-voice.exe` carrega a DLL adjacente de libwebrtc e
 libmediasoupclient. Ele controla WASAPI, filtros, Opus, ICE/DTLS/SRTP e reprodução.
@@ -22,7 +24,7 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/voice_mixer.hpp`: volume e reforço das vozes recebidas.
 - `native/voice/cpp/voice_health.hpp`: medição e recuperação limitada da qualidade.
 - `native/voice/cpp/audio_priority.hpp`: registro MMCSS na thread de áudio.
-- `electron/voice/`: autorização, preferência e ciclo do processo.
+- `electron/voice/`: autorização, consulta de dispositivos e ciclo do processo.
 - `renderer/native-voice.ts`: contrato público, sessão e cancelamento.
 - `renderer/voice-transport-recovery.ts`: recuperação ICE compartilhada com a web.
 
@@ -36,7 +38,7 @@ da web e nativa não produzem amostras idênticas; escolhas e unidades são comu
 
 O renderer mantém autenticação e os comandos existentes Socket.IO. Antes de abrir
 o motor, o bootstrap precisa anunciar `voiceTransportProtocol: 1`. Servidores
-anteriores usam voz web com aviso. `create-transport` acrescenta `purpose: "voice"`
+anteriores usam voz web. `create-transport` acrescenta `purpose: "voice"`
 a um único par adicional por participante; `consume` recebe seu `transportId`.
 Identidade, autorização, idempotência, unicidade do microfone, consumer inicialmente
 pausado, eventos de mute e limpeza permanecem compartilhados com a web. O par de
@@ -112,12 +114,24 @@ inclui revisão/modelo, quantidade de blocos e tempos médio/máximo, sem PCM.
 `noiseSuppressionMode` para desktops anteriores, que rejeitam campos novos, e
 mantém a redução WebRTC deles até atualizar. O protocolo público continua v1.
 
-Saída, navegação completa, falha do renderer, timeout e fechamento encerram o helper.
-EOF também libera recursos. Falha reconecta a sala com voz web, preservando
-mute/deafen, após liberar a sessão anterior. A mesma chamada não repete tentativas
-nativas; nova entrada manual permite testar novamente. Conexão tem prazo; ICE
+Saída, navegação completa, falha do renderer, timeout de mídia/controle e fechamento
+encerram o helper. EOF também libera recursos. Timeout de estatísticas/dispositivos
+rejeita somente a consulta; não encerra a voz. Consultas simultâneas de dispositivos
+fora da chamada compartilham um helper temporário, e a abertura da chamada aguarda
+sua liberação. Durante a sessão, as consultas usam o helper da chamada. A ponte
+antiga é serializada pelo renderer para preservar a mesma ordem de propriedade.
+
+Durante a sessão nativa, a ponte desabilita background throttling no WebContents,
+para manter sinalização autenticada e timers de recuperação quando minimizado.
+Ao encerrar, restaura a configuração anterior. Não altera a prioridade do sistema.
+
+Falha libera a sessão anterior e reconecta com voz nativa, preservando mute/deafen.
+Após três falhas seguidas, a recuperação usa voz web como último recurso. Uma
+chamada nativa estável por 60 s restaura o orçamento; entradas curtas que voltam
+a falhar não criam um ciclo infinito. Nova entrada manual também restaura o
+orçamento. O motivo da falha entra no diagnóstico local. Conexão tem prazo; ICE
 conectado/completo cancela o prazo. Desconexão persistente tenta recuperar ICE
-antes de reconectar com voz web; o helper anterior é revogado antes do fallback.
+antes de reconstruir a sessão nativa; o helper anterior é revogado primeiro.
 
 As salas usam Opus mono a 48 kHz, FEC e DTX, com perfis 32/64/96/128/256 kbit/s.
 O SDP permite até 256 kbit/s; o limite efetivo do encoder segue a sala e pode
@@ -171,7 +185,8 @@ Ele recebe outro MID/decoder e só é retomado depois da instalação local.
 Silêncio, DTX, remetente pausado, ausência/reinício de contadores e janelas atrasadas
 não justificam reparos. Perda real de rede é diagnosticada sem reiniciar o decoder.
 Há no máximo dois reparos por caminho/sessão, intervalo mínimo de 30 s; falha ou
-esgotamento usa o fallback web existente. Filtros e configurações permanecem comuns.
+esgotamento solicita reconstrução da sessão, dentro do orçamento de recuperação
+nativa. Filtros e configurações permanecem comuns.
 
 Estatísticas usam milissegundos como RTCStatsReport web e entram nos filtros de
 diagnóstico existentes, com referências
