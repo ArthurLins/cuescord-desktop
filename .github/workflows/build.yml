@@ -1,4 +1,4 @@
-name: Build installers
+name: Build desktop packages
 
 on:
   push:
@@ -77,8 +77,18 @@ jobs:
       - name: Verify signed macOS microphone and camera permissions
         if: matrix.platform == 'macos'
         run: node scripts/check-mac-media.mjs
-      - name: Package installer ZIP, legacy installer and provenance
+      - name: Package application update, installer ZIP and provenance
         run: node scripts/artifacts.mjs
+      - name: Verify Windows application replacement and rollback
+        if: matrix.platform == 'windows'
+        run: node --test tests/windows-update-integration.test.mjs
+        env:
+          CUESCORD_REQUIRE_UPDATE_TEST: '1'
+      - name: Verify Windows updater interface and packaged IPC in Electron
+        if: matrix.platform == 'windows'
+        run: |
+          pnpm exec playwright install chromium
+          pnpm test:ui
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: installer-${{ matrix.platform }}-${{ matrix.arch }}
@@ -118,14 +128,17 @@ jobs:
           cat > notes.md <<'EOF'
           Instaladores gerados pelo GitHub Actions a partir desta tag pública.
 
-          - Windows x64: ZIP contendo o instalador .exe
+          - Windows x64: atualização pelo aplicativo com reinício automático; ZIP e .exe para primeira instalação e clientes antigos
           - Debian/Ubuntu amd64: ZIP contendo o pacote .deb
           - macOS Apple Silicon arm64: ZIP contendo o .dmg; sem versão Intel
 
           Para instalar manualmente, extraia o ZIP e abra o instalador pelo sistema.
           Instaladores diretos também são publicados para compatibilidade com clientes antigos.
 
-          update-manifest.json autentica os ZIPs e os instaladores com a chave pública embutida no cliente.
+          Clientes Windows anteriores à 0.4.10 precisam concluir o instalador uma última vez para receber o novo atualizador.
+          A partir da 0.4.10, as próximas atualizações podem substituir o aplicativo e reiniciá-lo após confirmação na interface.
+
+          update-manifest.json autentica o pacote completo do Windows, os ZIPs e os instaladores com a chave pública embutida no cliente.
           Consulte os arquivos build-info e sha256sums para identificar commit, runtime e hashes.
           Assinatura de publicador/notarização dependem dos certificados configurados pelo mantenedor.
           Sem certificados, Windows não tem assinatura de publicador e macOS usa assinatura ad-hoc.

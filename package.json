@@ -1,6 +1,6 @@
 {
   "name": "@cuescord/desktop",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -26,8 +26,8 @@
     "desktop:dev": "node scripts/dev.mjs",
     "desktop:dev:existing": "node scripts/dev.mjs existing",
     "desktop:dev:remote": "node scripts/dev.mjs remote",
-    "desktop:build": "node scripts/build-native-voice.mjs && node scripts/build.mjs && electron-builder --config electron-builder.cjs --publish never",
-    "desktop:build:win": "node scripts/build-native-voice.mjs && node scripts/build.mjs && electron-builder --config electron-builder.cjs --win nsis --x64 --publish never",
+    "desktop:build": "node scripts/build-updater.mjs && node scripts/build-native-voice.mjs && node scripts/build.mjs && electron-builder --config electron-builder.cjs --publish never",
+    "desktop:build:win": "node scripts/build-updater.mjs && node scripts/build-native-voice.mjs && node scripts/build.mjs && electron-builder --config electron-builder.cjs --win nsis --x64 --publish never",
     "desktop:build:linux": "node scripts/build.mjs && electron-builder --config electron-builder.cjs --linux deb --x64 --publish never",
     "desktop:build:mac": "node scripts/build.mjs && electron-builder --config electron-builder.cjs --mac dmg --arm64 --publish never",
     "desktop:check": "node scripts/check.mjs",

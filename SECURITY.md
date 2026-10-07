@@ -114,6 +114,18 @@ A assinatura do manifesto não substitui certificados de publicador,
 SmartScreen ou Gatekeeper. Não se executa instalador silencioso nem comando
 fornecido pelo site. Linux/macOS usam a instalação normal de .deb/.dmg.
 
+No Windows com suporte a atualização pelo aplicativo, o manifesto também autentica
+o pacote completo `cuescord-app-v1`. A extração restringe caminhos, nomes, tamanho,
+quantidade e hashes; links, ADS, travessia e aliases Windows são recusados.
+Executável/runtime, ASAR e helpers são atualizados juntos. Cada arquivo extraído
+mantém a marca de Internet. Após confirmação, um helper da instalação atual
+revalida plano local e arquivos, mantém um handle do pai com identidade conferida,
+espera sua saída e troca diretórios na mesma unidade. Não usa elevação nem aceita
+comandos da página. Startup sem confirmação restaura a versão anterior; backups
+e perfil são preservados. A proteção contra downgrade continua no manifesto,
+inclusive após recuperação local de uma tentativa que falhou. Detalhes e limites
+de perda de energia/espaço estão em [WINDOWS-UPDATES.md](docs/WINDOWS-UPDATES.md).
+
 O Git distribui somente a chave pública. A chave privada inicial é protegida por
 Windows DPAPI CurrentUser, fica em .update-signing ignorado pelo Git e não é
 incluída no aplicativo. O secret UPDATE_SIGNING_PRIVATE_KEY é acessado apenas

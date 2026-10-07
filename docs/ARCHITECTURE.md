@@ -24,7 +24,8 @@ PCM -> preload -> renderer/AudioWorklet -> MediaStream do site
 | electron/window/window-controls.cjs | Comandos IPC da janela com validação de remetente |
 | electron/window/desktop-presence.cjs, status-icons.cjs | Bandeja, fechar para ocultar, contador Windows, indicadores de chamada/microfone e proteção de chamada contra limitação em segundo plano; IPC com estado e origem validados |
 | electron/update/window.cjs, preload.cjs, ui/ | Janela local isolada; IPC exclusivo para atualização |
-| electron/update/policy.cjs, network.cjs, updater.cjs | HTTPS restrito, assinatura, download, verificação e abertura do instalador |
+| electron/update/policy.cjs, network.cjs, updater.cjs | HTTPS restrito, assinatura, download, verificação e aplicação da atualização |
+| electron/update/application.cjs, windows-application.cjs, native/updater/ | Pacote completo Windows, staging, espera pelo pai, troca, reinício e recuperação |
 | electron/update/trusted-keys.json | Chaves públicas de atualização fixadas no cliente |
 | scripts/sign-update.mjs, update-key.mjs | Assinatura da release e chave privada protegida por DPAPI |
 | electron/security/policy.cjs | URL de produção, origem exata e permissões permitidas |
@@ -67,7 +68,8 @@ Não há serviço de sistema instalado nem captura persistente em segundo plano.
 
 ## Limites conhecidos
 
-Atualizações são manuais e usam a instalação nativa do sistema. O site só pode
+Atualizações exigem confirmação local. Windows usa troca do aplicativo e reinício;
+clientes antigos e Linux/macOS usam a instalação nativa do sistema. O site só pode
 abrir a janela local; a janela controla os pedidos de atualização. Nenhuma chave
 privada ou script de publicação é empacotado. Veja SECURITY.md e RELEASING.md para
 o formato assinado, a cadeia de confiança e o preparo da primeira release.

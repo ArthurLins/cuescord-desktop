@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import policy from '../electron/update/policy.cjs';
 import archive from '../electron/update/archive.cjs';
+import application from '../electron/update/application.cjs';
 
 async function sha256(file) {
   const hash = createHash('sha256');
@@ -29,10 +30,24 @@ export async function collectInstaller({
   await archive.createInstallerZip(path.join(output, name), path.join(output, zipName), name);
   const installerHash = await sha256(path.join(output, name));
   const archiveHash = await sha256(path.join(output, zipName));
+  let applicationInfo;
+  if (platform === 'win32' && arch === 'x64') {
+    const file = policy.applicationName(manifest.version);
+    await application.createApplicationBundle(
+      path.join(root, 'release/win-unpacked'),
+      path.join(output, file),
+      manifest.version,
+    );
+    applicationInfo = {
+      format: 'cuescord-app-v1',
+      file,
+      sha256: await sha256(path.join(output, file)),
+    };
+  }
   const label = `${platform}-${arch}`;
   await writeFile(
     path.join(output, `sha256sums-${label}.txt`),
-    `${installerHash}  ${name}\n${archiveHash}  ${zipName}\n`,
+    `${installerHash}  ${name}\n${archiveHash}  ${zipName}\n${applicationInfo ? `${applicationInfo.sha256}  ${applicationInfo.file}\n` : ''}`,
   );
   const info = {
     version: manifest.version,
@@ -46,6 +61,7 @@ export async function collectInstaller({
     installer: name,
     sha256: installerHash,
     archive: { format: 'zip-store-v1', file: zipName, sha256: archiveHash },
+    ...(applicationInfo ? { application: applicationInfo } : {}),
     workflow: env.GITHUB_RUN_ID
       ? `https://github.com/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
       : null,

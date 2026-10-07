@@ -3,6 +3,11 @@ const { pathToFileURL } = require('node:url');
 const { BrowserWindow, dialog, shell } = require('electron');
 const { DesktopUpdater } = require('./updater.cjs');
 const { keys } = require('./trusted-keys.json');
+const {
+  prepareApplication,
+  launchApplication,
+  discardApplication,
+} = require('./windows-application.cjs');
 
 function installUpdates({ app, ipcMain, getWindow }) {
   let window;
@@ -29,17 +34,27 @@ function installUpdates({ app, ipcMain, getWindow }) {
     cacheRoot: path.join(app.getPath('userData'), 'updates'),
     keys,
     packaged: app.isPackaged,
-    confirmInstall: async (version, platform) => {
+    confirmInstall: async (version, platform, applicationUpdate) => {
       if (!window || window.isDestroyed()) return false;
       const { response } = await dialog.showMessageBox(window, {
         type: 'question',
         title: 'Atualizar Cuescord',
-        message: `Abrir a atualização ${version}?`,
-        detail:
-          platform === 'win32'
+        message: applicationUpdate
+          ? `Atualizar e reiniciar para a versão ${version}?`
+          : `Abrir a atualização ${version}?`,
+        detail: applicationUpdate
+          ? 'O Cuescord aplicará a atualização e reiniciará automaticamente. Encerre suas chamadas antes de continuar.'
+          : platform === 'win32'
             ? 'O download foi verificado. O Cuescord será fechado para abrir o instalador; encerre suas chamadas antes de continuar. O Windows pode mostrar “publicador desconhecido”.'
             : 'O download foi verificado. Conclua a instalação no sistema e reinicie o Cuescord. Encerre suas chamadas antes de substituir o aplicativo.',
-        buttons: ['Cancelar', platform === 'win32' ? 'Instalar atualização' : 'Abrir instalador'],
+        buttons: [
+          'Cancelar',
+          applicationUpdate
+            ? 'Atualizar e reiniciar'
+            : platform === 'win32'
+              ? 'Instalar atualização'
+              : 'Abrir instalador',
+        ],
         defaultId: 0,
         cancelId: 0,
         noLink: true,
@@ -47,6 +62,26 @@ function installUpdates({ app, ipcMain, getWindow }) {
       return response === 1;
     },
     openInstaller: (file) => shell.openPath(file),
+    applyApplication:
+      process.platform === 'win32' && app.isPackaged
+        ? async (ready, canInstall) => {
+            const prepared = await prepareApplication({
+              ready,
+              executable: process.execPath,
+              cacheRoot: path.join(app.getPath('userData'), 'updates'),
+            });
+            let child;
+            try {
+              if (!canInstall()) throw new Error('A janela de atualização foi encerrada.');
+              child = await launchApplication(prepared);
+              if (!canInstall()) throw new Error('A janela de atualização foi encerrada.');
+            } catch (error) {
+              child?.kill();
+              await discardApplication(prepared);
+              throw error;
+            }
+          }
+        : undefined,
     onInstalled: (platform) => {
       if (platform === 'win32') app.quit();
     },

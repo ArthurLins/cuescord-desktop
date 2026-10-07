@@ -1,10 +1,11 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { createInstallerZip } = require('../electron/update/archive.cjs');
+const { createApplicationBundle } = require('../electron/update/application.cjs');
 export const policy = require('../electron/update/policy.cjs');
 export const bytes = Buffer.from('a verified installer fixture');
 export function fixture(version = '0.5.0') {
@@ -74,6 +75,31 @@ export async function zipFixture(version = '0.5.0') {
       };
     }
     return { ...data, envelope: data.signed(), files };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+export async function applicationFixture(version = '0.5.0') {
+  const data = await zipFixture(version);
+  const directory = await mkdtemp(path.join(tmpdir(), 'cuescord-application-fixture-'));
+  try {
+    const source = path.join(directory, 'application');
+    await mkdir(path.join(source, 'resources/updater'), { recursive: true });
+    await writeFile(path.join(source, 'Cuescord.exe'), bytes);
+    await writeFile(path.join(source, 'resources/app.asar'), bytes);
+    await writeFile(path.join(source, 'resources/updater/cuescord-update.exe'), bytes);
+    const file = policy.applicationName(version);
+    await createApplicationBundle(source, path.join(directory, file), version);
+    const bundle = await readFile(path.join(directory, file));
+    data.files.set(file, bundle);
+    data.manifest.artifacts[0].application = {
+      format: 'cuescord-app-v1',
+      file,
+      size: bundle.length,
+      sha512: createHash('sha512').update(bundle).digest('hex'),
+    };
+    return { ...data, envelope: data.signed() };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

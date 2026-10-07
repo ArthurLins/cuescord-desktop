@@ -31,7 +31,7 @@ local, release publicada e atualização validada são resultados distintos.
 
 ## Pipeline
 
-O workflow build.yml compila pull requests, pushes em main, tags v\* e execução
+O workflow **Build desktop packages** (`build.yml`) compila pull requests, pushes em main, tags v\* e execução
 manual. A matriz usa Windows x64, Ubuntu x64 e macOS 15 arm64.
 macOS é explicitamente arm64; não há alvo Intel/universal.
 
@@ -95,6 +95,19 @@ caminhos, links, extras ou comentários. O build-info e sha256sums registram ZIP
 e instalador; o job de assinatura verifica também o conteúdo interno antes de
 assinar e continua exigindo os três builds da mesma revisão.
 
+No Windows, `scripts/build-updater.mjs` também compila/testa o helper Rust
+`cuescord-update.exe` com Cargo.lock e Rust 1.94.0. O helper integra os recursos
+do aplicativo. Depois de assinar/empacotar, `scripts/artifacts.mjs` gera
+`Cuescord-X.Y.Z-win-x64.cua` a partir de **todos** os arquivos de `win-unpacked`,
+incluindo Electron, ASAR, módulos e helpers de áudio/voz/atualização. Não use apenas
+o ASAR: a atualização deve acompanhar mudanças do runtime e dos binários nativos.
+Build-info e sha256sums incluem o pacote. O job de release verifica provenance,
+estrutura e cada arquivo interno antes de assinar seu tamanho/SHA-512 no campo
+`application` do artefato Windows. Falha impede publicar; o pacote Windows é obrigatório.
+O aceite do helper no runner Windows testa espera pelo processo, troca completa,
+reinício, recuperação de startup e preservação do perfil/desinstalador.
+Veja [WINDOWS-UPDATES.md](WINDOWS-UPDATES.md) para formato, transação e recuperação.
+
 ### Compatibilidade com clientes já instalados
 
 A partir de 0.4.3, o cliente prefere o ZIP autenticado e extrai o instalador
@@ -111,6 +124,15 @@ esses clientes. A suíte valida o novo manifesto contra a política congelada de
 0.4.2. Clientes novos ainda aceitam manifestos anteriores sem ZIP, respeitando
 a versão instalada e o histórico contra downgrade; falha num ZIP anunciado
 nunca causa fallback silencioso para o binário direto.
+
+Clientes a partir de 0.4.10 preferem o campo `application` assinado no Windows,
+sem abrir NSIS. Schema 1, contexto e instaladores/ZIPs continuam compatíveis com
+clientes antigos. Quem ainda tem o atualizador anterior precisa instalar a primeira
+release com este código pelo fluxo antigo **uma última vez**; daí em diante usa
+**Atualizar e reiniciar**. Não é possível mudar o atualizador já instalado apenas
+publicando outro tipo de arquivo. Quem pula a release de transição continua atendido
+pelos instaladores/ZIPs legados. Falha em pacote anunciado nunca abre um instalador
+como fallback. Linux/macOS mantêm o fluxo normal de instalação do sistema.
 
 ## Publicar
 
@@ -161,8 +183,10 @@ reexecutar. Releases públicas devem receber uma versão nova, sem trocar assets
 
 Clientes até 0.3.1 não têm atualizador: instale 0.4.0 manualmente uma vez. Depois,
 o botão verifica a release estável mais recente do repositório fixado. Uma versão
-mais nova só é oferecida após validar a assinatura do manifesto. Windows abre
-o NSIS verificado extraído do ZIP e fecha o cliente após confirmação; Linux/macOS abrem .deb/.dmg
+mais nova só é oferecida após validar a assinatura do manifesto. No Windows com
+suporte a `application`, a confirmação local **Atualizar e reiniciar** prepara
+a troca, fecha o cliente e o helper aplica/reabre a versão nova. Instalações antigas
+ou releases sem esse campo usam NSIS após confirmação. Linux/macOS abrem .deb/.dmg
 e exigem concluir a instalação pelo sistema. Não são usados sudo, instaladores
 silenciosos ou desvios das proteções do sistema. O atualizador fica desativado
 quando o cliente roda a partir do código.
@@ -181,13 +205,18 @@ Hashes detectam mudanças nos arquivos, mas não substituem assinatura de public
 As licenças upstream e o lockfile ajudam a inspecionar os binários de terceiros;
 os builds não são certificados como reproduzíveis byte a byte.
 
-No aceite, confira os três ZIPs e os três instaladores diretos, valide a assinatura
+No aceite, confira o pacote completo Windows, os três ZIPs e os três instaladores diretos, valide a assinatura
 Ed25519 e os hashes/tamanhos de ambos. Extraia manualmente um ZIP pelo sistema
 para conferir interoperabilidade. Teste atualização de 0.4.2 para a release nova
 pelo instalador direto e, entre duas versões com suporte a ZIP, download,
 extração, cancelamento, confirmação e abertura pelo aplicativo. Teste também
 um cliente antigo pulando a primeira release com ZIP. Use máquina/VM e perfil
 isolados; não modifique a instalação real do desenvolvedor para esse aceite.
+Entre duas versões que suportam o pacote Windows, confira download/cancelamento,
+confirmação, fechamento, reinício com a versão correta, sessão/preferências/atalhos,
+desinstalação e voz nativa. Teste também falha no startup e restauração da versão
+anterior, arquivos bloqueados, falta de espaço/permissão e Internet marks preservadas.
+O teste sintético do helper não substitui esse aceite do aplicativo instalado.
 
 ## Certificados opcionais
 
@@ -216,7 +245,7 @@ devem ser resolvidas antes de distribuir uma release como assinada.
 Assinar o manifesto permite ao cliente autenticar o download sem certificado
 Windows, mas não remove os alertas/bloqueios de publicador desconhecido do sistema.
 Distribuir em ZIP também não garante remover o SmartScreen/Gatekeeper. O cliente
-marca tanto o ZIP quanto o instalador extraído como download da Internet no Windows
+marca o pacote completo e todos os arquivos extraídos, além do ZIP/instalador legado, como download da Internet no Windows
 ou com quarentena no macOS; não remova essas marcas para evitar avisos.
 
 Referências: [runners GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)

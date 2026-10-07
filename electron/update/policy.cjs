@@ -40,6 +40,11 @@ function archiveName(version, platform, arch) {
   return installerName(version, platform, arch).replace(/\.[^.]+$/, '.zip');
 }
 
+function applicationName(version) {
+  versionParts(version);
+  return `Cuescord-${version}-win-x64.cua`;
+}
+
 function validFileMetadata(artifact, limit) {
   return (
     artifact &&
@@ -105,7 +110,12 @@ function verifyManifest(envelope, trustedKeys) {
           artifact.archive.file !==
             archiveName(manifest.version, artifact.platform, artifact.arch) ||
           !validFileMetadata(artifact.archive, MAX_ARCHIVE_SIZE) ||
-          artifact.archive.size !== artifact.size + 98 + 2 * Buffer.byteLength(artifact.file)))
+          artifact.archive.size !== artifact.size + 98 + 2 * Buffer.byteLength(artifact.file))) ||
+      (artifact.application !== undefined &&
+        (target !== 'win32-x64' ||
+          artifact.application?.format !== 'cuescord-app-v1' ||
+          artifact.application.file !== applicationName(manifest.version) ||
+          !validFileMetadata(artifact.application, 2 * MAX_INSTALLER_SIZE)))
     )
       throw new Error('Arquivo de atualização inválido.');
     platforms.add(target);
@@ -160,6 +170,7 @@ module.exports = {
   compareVersions,
   installerName,
   archiveName,
+  applicationName,
   publicKeyId,
   verifyManifest,
   selectArtifact,

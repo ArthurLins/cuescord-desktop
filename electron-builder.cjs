@@ -32,6 +32,11 @@ module.exports = {
     icon: 'assets/icons/icon.ico',
     extraResources: [
       {
+        from: '.cache/updater/bin',
+        to: 'updater',
+        filter: ['cuescord-update.exe', 'UPDATER_NOTICES.txt'],
+      },
+      {
         from: '.cache/native-voice/bin',
         to: 'native-voice',
         filter: [

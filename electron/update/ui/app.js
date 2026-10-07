@@ -21,7 +21,8 @@ function render(state) {
     ],
     downloading: ['Baixando atualização', `${state.progress}% — você pode cancelar o download.`],
     ready: ['Download verificado', `A versão ${state.availableVersion} está pronta para instalar.`],
-    installing: ['Preparando instalação', 'Confirme na janela do sistema para continuar.'],
+    installing: ['Preparando atualização', 'Confirme para continuar…'],
+    restarting: ['Atualizando o Cuescord', 'O aplicativo será reiniciado automaticamente.'],
     opened: ['Instalador aberto', 'Conclua a instalação no sistema e reinicie o Cuescord.'],
     current: ['Você está atualizado', 'A versão mais recente já está instalada.'],
     error: ['Não foi possível atualizar', state.message || 'Tente novamente em alguns instantes.'],
@@ -35,20 +36,25 @@ function render(state) {
   document.getElementById('message').textContent = text[1];
   document.getElementById('detail').textContent =
     status === 'ready'
-      ? 'Encerre suas chamadas antes de instalar. As proteções do sistema operacional permanecem ativas.'
-      : 'O cliente verifica a origem e a integridade da atualização antes de abrir o instalador.';
+      ? state.applicationUpdate
+        ? 'Encerre suas chamadas. O Cuescord atualizará e reiniciará automaticamente.'
+        : 'Encerre suas chamadas antes de instalar.'
+      : 'O Cuescord verifica a atualização antes de aplicá-la.';
   progress.hidden = status !== 'downloading';
   progress.value = state.progress || 0;
   action.textContent =
     status === 'available'
       ? 'Baixar atualização'
       : status === 'ready'
-        ? 'Instalar atualização'
+        ? state.applicationUpdate
+          ? 'Atualizar e reiniciar'
+          : 'Instalar atualização'
         : status === 'error'
           ? 'Tentar novamente'
           : 'Verificar atualização';
   action.disabled =
-    request || ['checking', 'downloading', 'installing', 'opened', 'disabled'].includes(status);
+    request ||
+    ['checking', 'downloading', 'installing', 'restarting', 'opened', 'disabled'].includes(status);
   cancel.hidden = !['checking', 'downloading'].includes(status);
   cancel.textContent = status === 'checking' ? 'Cancelar verificação' : 'Cancelar download';
 }

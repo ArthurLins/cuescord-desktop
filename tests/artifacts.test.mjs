@@ -18,6 +18,13 @@ test('matrix packaging -> provenance -> signing -> old/new clients, including sk
   t.after(() => rm(root, { recursive: true, force: true }));
   const data = fixture('0.6.0');
   await mkdir(path.join(root, 'release'));
+  await mkdir(path.join(root, 'release/win-unpacked/resources/updater'), { recursive: true });
+  for (const file of [
+    'Cuescord.exe',
+    'resources/app.asar',
+    'resources/updater/cuescord-update.exe',
+  ])
+    await writeFile(path.join(root, 'release/win-unpacked', file), bytes);
   await writeFile(
     path.join(root, 'package.json'),
     JSON.stringify({
@@ -38,7 +45,11 @@ test('matrix packaging -> provenance -> signing -> old/new clients, including sk
       path.join(root, 'artifacts', `sha256sums-${a.platform}-${a.arch}.txt`),
       'utf8',
     );
-    for (const file of [a.file, info.archive.file]) {
+    for (const file of [
+      a.file,
+      info.archive.file,
+      ...(info.application ? [info.application.file] : []),
+    ]) {
       const content = await readFile(path.join(root, 'artifacts', file));
       assert.ok(sums.includes(`${createHash('sha256').update(content).digest('hex')}  ${file}\n`));
     }

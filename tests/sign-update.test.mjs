@@ -5,18 +5,23 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { signUpdate } from '../scripts/sign-update.mjs';
-import { zipFixture, bytes, policy } from './update-fixture.mjs';
+import { applicationFixture, zipFixture, bytes, policy } from './update-fixture.mjs';
 
 test('release signer binds all three installers to version, commit and trusted public key', async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'cuescord-signer-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const data = await zipFixture();
+  const data = await applicationFixture();
   for (const artifact of data.manifest.artifacts) {
     await writeFile(path.join(directory, artifact.file), bytes);
     await writeFile(
       path.join(directory, artifact.archive.file),
       data.files.get(artifact.archive.file),
     );
+    if (artifact.application)
+      await writeFile(
+        path.join(directory, artifact.application.file),
+        data.files.get(artifact.application.file),
+      );
     await writeFile(
       path.join(directory, `build-info-${artifact.platform}-${artifact.arch}.json`),
       JSON.stringify({
@@ -31,6 +36,17 @@ test('release signer binds all three installers to version, commit and trusted p
           file: artifact.archive.file,
           sha256: createHash('sha256').update(data.files.get(artifact.archive.file)).digest('hex'),
         },
+        ...(artifact.application
+          ? {
+              application: {
+                format: 'cuescord-app-v1',
+                file: artifact.application.file,
+                sha256: createHash('sha256')
+                  .update(data.files.get(artifact.application.file))
+                  .digest('hex'),
+              },
+            }
+          : {}),
       }),
     );
   }

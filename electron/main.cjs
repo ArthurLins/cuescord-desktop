@@ -21,6 +21,7 @@ const { installCapture } = require('./capture/capture.cjs');
 const { installUpdates } = require('./update/window.cjs');
 const { installAudio } = require('./audio/audio.cjs');
 const { installNativeVoice } = require('./voice/native-voice.cjs');
+const { acknowledgeApplication } = require('./update/windows-application.cjs');
 
 app.setName('Cuescord');
 app.setAppUserModelId('net.cuesc.cuescord');
@@ -90,7 +91,15 @@ function createWindow(appSession) {
     else openExternal(url);
     return { action: 'deny' };
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    if (app.isPackaged && process.platform === 'win32')
+      void acknowledgeApplication({
+        cacheRoot: path.join(app.getPath('userData'), 'updates'),
+        version: app.getVersion(),
+        executable: process.execPath,
+      });
+  });
   win.once('closed', () => {
     if (mainWindow === win) mainWindow = undefined;
   });

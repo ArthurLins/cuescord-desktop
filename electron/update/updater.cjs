@@ -7,6 +7,7 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const network = require('./network.cjs');
 const { extractInstallerZip } = require('./archive.cjs');
+const { extractApplicationBundle, verifyApplicationDirectory } = require('./application.cjs');
 const {
   API_URL,
   compareVersions,
@@ -70,6 +71,7 @@ class DesktopUpdater extends EventEmitter {
     markFile = markDownloadedFile,
     confirmInstall,
     openInstaller,
+    applyApplication,
     onInstalled = () => {},
   }) {
     super();
@@ -85,6 +87,7 @@ class DesktopUpdater extends EventEmitter {
       markFile,
       confirmInstall,
       openInstaller,
+      applyApplication,
       onInstalled,
     });
     this.state = { status: packaged ? 'idle' : 'disabled', currentVersion: version };
@@ -93,6 +96,11 @@ class DesktopUpdater extends EventEmitter {
 
   getState() {
     return { ...this.state };
+  }
+  downloadArtifact(artifact) {
+    return this.platform === 'win32' && this.applyApplication && artifact.application
+      ? artifact.application
+      : artifact.archive || artifact;
   }
   publish(status, details = {}) {
     this.state = { status, currentVersion: this.version, ...details };
@@ -169,7 +177,8 @@ class DesktopUpdater extends EventEmitter {
       this.available = { envelope, artifact, version };
       return this.publish('available', {
         availableVersion: version,
-        size: (artifact.archive || artifact).size,
+        size: this.downloadArtifact(artifact).size,
+        applicationUpdate: this.downloadArtifact(artifact) === artifact.application,
       });
     } catch (error) {
       return this.failure(error, operation.signal);
@@ -185,7 +194,7 @@ class DesktopUpdater extends EventEmitter {
     this.busy = true;
     const operation = (this.operation = new AbortController());
     const timer = setTimeout(() => operation.abort(), 15 * 60000);
-    let directory, file, archive;
+    let directory, file, archive, applicationDirectory;
     const { envelope, version } = this.available;
     this.publish('downloading', { availableVersion: version, progress: 0 });
     try {
@@ -199,8 +208,10 @@ class DesktopUpdater extends EventEmitter {
       );
       directory = await fs.mkdtemp(path.join(this.cacheRoot, 'download-'));
       file = path.join(directory, artifact.file);
-      const download = artifact.archive || artifact;
-      const destination = artifact.archive ? (archive = path.join(directory, download.file)) : file;
+      const download = this.downloadArtifact(artifact);
+      const application = download === artifact.application;
+      const destination =
+        application || artifact.archive ? (archive = path.join(directory, download.file)) : file;
       const url = releaseUrl(version, download.file);
       let previous = -1;
       await this.downloadVerified(url, download, destination, operation.signal, (progress) => {
@@ -212,15 +223,39 @@ class DesktopUpdater extends EventEmitter {
       // Re-read disk even when the network helper has already verified its stream.
       await verifyFile(destination, download);
       await this.markFile(destination, url, this.platform);
-      if (archive) {
+      let files;
+      if (application) {
+        applicationDirectory = path.join(directory, 'application');
+        files = await extractApplicationBundle(
+          archive,
+          applicationDirectory,
+          version,
+          operation.signal,
+          (location) => this.markFile(location, url, this.platform),
+        );
+      } else if (archive) {
         await extractInstallerZip(archive, file, artifact, operation.signal);
         await this.markFile(file, url, this.platform);
       }
-      await verifyFile(file, artifact);
+      if (!application) await verifyFile(file, artifact);
       operation.signal.throwIfAborted();
-      this.ready = { file, archive, directory, envelope, artifact, version };
-      return this.publish('ready', { availableVersion: version, progress: 100 });
+      this.ready = {
+        file: application ? undefined : file,
+        archive,
+        directory,
+        envelope,
+        artifact,
+        version,
+        applicationDirectory,
+        files,
+      };
+      return this.publish('ready', {
+        availableVersion: version,
+        progress: 100,
+        applicationUpdate: application,
+      });
     } catch (error) {
+      if (applicationDirectory) await fs.rm(applicationDirectory, { recursive: true, force: true });
       await cleanup(directory, [file, archive]);
       return this.failure(error, operation.signal);
     } finally {
@@ -243,8 +278,13 @@ class DesktopUpdater extends EventEmitter {
     const ready = this.ready;
     this.publish('installing', { availableVersion: ready.version });
     try {
-      if (!(await this.confirmInstall(ready.version, this.platform)))
-        return this.publish('ready', { availableVersion: ready.version, progress: 100 });
+      const applicationUpdate = Boolean(ready.applicationDirectory);
+      if (!(await this.confirmInstall(ready.version, this.platform, applicationUpdate)))
+        return this.publish('ready', {
+          availableVersion: ready.version,
+          progress: 100,
+          applicationUpdate,
+        });
       if (!canInstall()) throw new Error('A janela de atualização foi encerrada.');
       const manifest = verifyManifest(ready.envelope, this.keys);
       const artifact = selectArtifact(
@@ -254,17 +294,28 @@ class DesktopUpdater extends EventEmitter {
         this.platform,
         this.arch,
       );
-      if (artifact.archive) await verifyFile(ready.archive, artifact.archive);
-      await verifyFile(ready.file, artifact);
+      if (applicationUpdate) {
+        await verifyFile(ready.archive, artifact.application);
+        await verifyApplicationDirectory(ready.applicationDirectory, ready.files);
+      } else {
+        if (artifact.archive) await verifyFile(ready.archive, artifact.archive);
+        await verifyFile(ready.file, artifact);
+      }
       if (!canInstall()) throw new Error('A janela de atualização foi encerrada.');
-      const result = await this.openInstaller(ready.file);
+      const result = applicationUpdate
+        ? await this.applyApplication(ready, canInstall)
+        : await this.openInstaller(ready.file);
       if (result) throw new Error('Não foi possível abrir o instalador.');
       this.launched = true;
-      this.publish('opened', { availableVersion: ready.version });
+      this.publish(applicationUpdate ? 'restarting' : 'opened', {
+        availableVersion: ready.version,
+      });
       this.onInstalled(this.platform);
       return this.getState();
     } catch (error) {
       this.ready = undefined;
+      if (ready.applicationDirectory)
+        await fs.rm(ready.applicationDirectory, { recursive: true, force: true });
       await cleanup(ready.directory, [ready.file, ready.archive]);
       return this.failure(error);
     } finally {

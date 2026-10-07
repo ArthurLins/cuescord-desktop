@@ -35,6 +35,10 @@ Desde 0.4.3, o cliente verifica a release, baixa o ZIP com progresso/cancelament
 extrai o instalador automaticamente e exige assinatura Ed25519 e hashes SHA-512
 válidos tanto do ZIP quanto do instalador antes de permitir instalar.
 Clientes 0.4.0–0.4.2 continuam atualizando pelo instalador direto.
+Com o novo atualizador, Windows x64 baixa o aplicativo completo e oferece
+**Atualizar e reiniciar**, sem abrir o setup. Clientes anteriores recebem esse
+suporte pelo instalador uma última vez. Pacotes, perfil e recuperação estão em
+[Atualizações Windows](docs/WINDOWS-UPDATES.md).
 Na ausência de certificados, Windows fica sem assinatura de publicador e macOS
 usa assinatura ad-hoc, sem notarização; o sistema pode bloquear a primeira
 abertura. ZIP não garante eliminar esses avisos. Consulte [distribuição e assinatura](docs/RELEASING.md).
@@ -60,8 +64,9 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
 - O preload injeta a barra Windows e o modal de compartilhamento, com IPC limitado.
 - Ao compartilhar áudio autorizado, um processo auxiliar captura PCM localmente.
 - Cookies, cache e armazenamento do site ficam no perfil local do Electron.
-- O atualizador consulta o GitHub apenas quando solicitado. No Windows, abre o
-  instalador verificado e fecha o cliente após confirmação; no Linux/macOS,
+- O atualizador consulta o GitHub apenas quando solicitado. No Windows com o novo
+  atualizador, aplica o pacote verificado e reinicia após confirmação; clientes
+  anteriores usam o instalador. No Linux/macOS,
   abre o pacote para concluir a instalação pelo sistema. Clientes anteriores
   à versão 0.4.0 precisam de uma instalação manual inicial.
 - O cliente não configura serviço de inicialização ou telemetria própria.

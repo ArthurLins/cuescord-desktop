@@ -12,12 +12,16 @@ Consulte package.json e pnpm-lock.yaml para versões e integridades exatas.
 | Playwright | Ferramentas das suites existentes | Apache-2.0: https://github.com/microsoft/playwright |
 | pnpm | Gerenciador de dependências | MIT: https://github.com/pnpm/pnpm |
 
-O motor experimental inclui libwebrtc m140, libmediasoupclient (ISC),
+O motor nativo inclui libwebrtc m140, libmediasoupclient (ISC),
 libsdptransform e nlohmann/json (MIT), além das dependências Rust de Cargo.lock.
 `native/voice/THIRD_PARTY_NOTICES.txt` e o NOTICE completo do pacote WebRTC são
 distribuídos com o helper em `resources/native-voice`. Fontes, revisão upstream,
 origem do binário WebRTC de terceiro e hashes constam em `docs/NATIVE-VOICE.md`
 e no script de build. A licença MIT do Cuescord não substitui esses avisos.
+
+O atualizador Windows também usa Serde/serde_json, RustCrypto SHA-2 e suas
+dependências, com versões/integridades em `native/updater/Cargo.lock`.
+O build reúne as licenças upstream completas em `resources/updater/UPDATER_NOTICES.txt`.
 
 Dependências transitivas têm seus próprios autores e licenças. Após instalar,
 `pnpm licenses list --prod` lista as dependências de produção presentes nessa

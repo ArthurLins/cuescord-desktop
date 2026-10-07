@@ -1,11 +1,12 @@
 import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rm, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import policy from '../electron/update/policy.cjs';
 import archive from '../electron/update/archive.cjs';
+import application from '../electron/update/application.cjs';
 
 const { REPOSITORY, SIGNING_CONTEXT, installerName, archiveName, publicKeyId, verifyManifest } =
   policy;
@@ -80,6 +81,27 @@ export async function signUpdate({ directory, version, tag, commit, privateKey, 
       await rmdir(temporary);
     }
     artifacts.push(artifact);
+    if (platform === 'win32') {
+      if (
+        info.application?.format !== 'cuescord-app-v1' ||
+        info.application.file !== policy.applicationName(version)
+      )
+        throw new Error('Windows application provenance does not match this release');
+      artifact.application = {
+        format: 'cuescord-app-v1',
+        ...(await fileMetadata(directory, info.application.file, info.application.sha256)),
+      };
+      const temporary = await mkdtemp(path.join(tmpdir(), 'cuescord-sign-application-'));
+      try {
+        await application.extractApplicationBundle(
+          path.join(directory, artifact.application.file),
+          path.join(temporary, 'application'),
+          version,
+        );
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    }
   }
   const payload = Buffer.from(
     JSON.stringify({ schema: 1, repository: REPOSITORY, version, artifacts }),

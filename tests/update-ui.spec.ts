@@ -112,3 +112,28 @@ test('verification failures render as text and permit retry', async ({ page }) =
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(page.getByRole('button', { name: 'Baixar atualização' })).toBeVisible();
 });
+
+test('Windows application updates offer restart and never ask to finish a setup', async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    (window as any).updateTest.emit({
+      status: 'ready',
+      currentVersion: '0.4.9',
+      availableVersion: '0.5.0',
+      applicationUpdate: true,
+      progress: 100,
+    }),
+  );
+  await expect(page.getByRole('button', { name: 'Atualizar e reiniciar' })).toBeVisible();
+  await expect(page.getByText(/reiniciará automaticamente/)).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).updateTest.emit({
+      status: 'restarting',
+      currentVersion: '0.4.9',
+      availableVersion: '0.5.0',
+    }),
+  );
+  await expect(page.getByRole('heading', { name: 'Atualizando o Cuescord' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Verificar atualização' })).toBeDisabled();
+});
