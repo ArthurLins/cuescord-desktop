@@ -31,6 +31,21 @@ Control, antivírus ou políticas administrativas. O manifesto autentica a orige
 da atualização e não substitui um certificado de publicador Windows. O sistema
 ainda pode bloquear um binário sem certificado/reputação.
 
+As operações de arquivo do atualizador usam `original-fs` dentro do Electron,
+inclusive extração, hash, cópia, limpeza e gravação de `Zone.Identifier`.
+O `fs` normal do Electron interpreta caminhos `.asar` como diretórios virtuais;
+não serve para escrever ou verificar os bytes do pacote. A escolha fica restrita
+ao atualizador, sem alterar `process.noAsar` nem o carregamento do aplicativo.
+Builds e testes Node usam o `fs` normal, pois não têm essa camada virtual.
+Veja a [documentação ASAR do Electron](https://www.electronjs.org/docs/latest/tutorial/asar-archives#treating-an-asar-archive-as-a-normal-file).
+
+As versões Windows 0.4.10 e 0.4.11 têm essa falha no atualizador instalado e
+podem mostrar `Invalid package ... app.asar` antes de preparar a troca. Elas
+precisam receber 0.4.12 ou posterior pelo instalador direto uma vez. Feche o
+Cuescord pela bandeja e execute o instalador no mesmo diretório, preservando o
+perfil; não exclua dados locais nem substitua arquivos ou assets publicados.
+Uma atualização anunciada que falha não inicia NSIS como fallback automático.
+
 ## Troca e recuperação
 
 1. O cliente baixa/verifica/extrai em diretório exclusivo de `userData/updates`.
@@ -75,4 +90,9 @@ O runner exige `CUESCORD_REQUIRE_UPDATE_TEST=1` após o build: não aceita pular
 espera, substituição, reinício, recuperação e adulteração. O executável fixture
 é exclusivamente de teste e não integra o aplicativo/artefatos públicos.
 `pnpm test:ui` cobre a confirmação visual e IPC isolado no Electron real.
+`tests/application-native.spec.ts` também reproduz extração, marcas de Internet,
+verificação e staging de um ASAR real e de `app.asar.unpacked`, com o atualizador
+do código-fonte e do ASAR empacotado. Confere os bytes copiados, recusa adulteração
+e garante que a leitura virtual normal continua ativa. O runner Windows exige
+`CUESCORD_REQUIRE_APPLICATION_TEST=1` depois do build para não pular esse aceite.
 Antes da release, complete o aceite entre versões instaladas conforme RELEASING.md.

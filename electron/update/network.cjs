@@ -1,6 +1,6 @@
 const https = require('node:https');
 const { createHash } = require('node:crypto');
-const { open, rename, unlink } = require('node:fs/promises');
+const { open, rename, unlink } = require('./filesystem.cjs').promises;
 const { validateNetworkUrl } = require('./policy.cjs');
 
 async function responseFor(value, kind, signal, request = https.get, redirects = 0) {

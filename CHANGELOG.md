@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.12
+
+- Corrige o erro `Invalid package ... app.asar` ao extrair, verificar e preparar a atualização completa no Electron, usando acesso aos bytes reais do arquivo.
+- Preserva hashes, proteção contra adulteração e marcas de download da Internet no ASAR e nos módulos nativos adjacentes, sem desativar o suporte ASAR do aplicativo.
+- Exige testes do atualizador no Electron real, pelo código-fonte e pelo ASAR empacotado, antes de publicar os pacotes Windows.
+- Para sair das versões 0.4.10 ou 0.4.11, instale esta versão uma vez pelo instalador Windows: o defeito está no atualizador já instalado.
+
 ## 0.4.11
 
 - Corrige a categoria dos fluxos de captura e reprodução da voz nativa no Windows para não acionar a redução automática do volume de outros aplicativos ao entrar em chamada.

@@ -1,7 +1,7 @@
 const { EventEmitter } = require('node:events');
 const { createHash, randomUUID } = require('node:crypto');
 const { constants } = require('node:fs');
-const fs = require('node:fs/promises');
+const fs = require('./filesystem.cjs').promises;
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');

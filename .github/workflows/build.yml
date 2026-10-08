@@ -86,6 +86,8 @@ jobs:
           CUESCORD_REQUIRE_UPDATE_TEST: '1'
       - name: Verify Windows updater interface and packaged IPC in Electron
         if: matrix.platform == 'windows'
+        env:
+          CUESCORD_REQUIRE_APPLICATION_TEST: '1'
         run: |
           pnpm exec playwright install chromium
           pnpm test:ui
@@ -135,8 +137,8 @@ jobs:
           Para instalar manualmente, extraia o ZIP e abra o instalador pelo sistema.
           Instaladores diretos também são publicados para compatibilidade com clientes antigos.
 
-          Clientes Windows anteriores à 0.4.10 precisam concluir o instalador uma última vez para receber o novo atualizador.
-          A partir da 0.4.10, as próximas atualizações podem substituir o aplicativo e reiniciá-lo após confirmação na interface.
+          Clientes Windows 0.4.10 e 0.4.11 precisam instalar a versão corrigida manualmente uma vez: o atualizador antigo falha ao extrair app.asar.
+          Clientes anteriores à 0.4.10 recebem o atualizador pelo instalador legado. A partir da 0.4.12, as próximas atualizações podem substituir o aplicativo e reiniciá-lo após confirmação na interface.
 
           update-manifest.json autentica o pacote completo do Windows, os ZIPs e os instaladores com a chave pública embutida no cliente.
           Consulte os arquivos build-info e sha256sums para identificar commit, runtime e hashes.

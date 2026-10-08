@@ -1,6 +1,6 @@
 const { createHash } = require('node:crypto');
 const { constants } = require('node:fs');
-const fs = require('node:fs/promises');
+const fs = require('./filesystem.cjs').promises;
 const { crc32 } = require('node:zlib');
 const { MAX_INSTALLER_SIZE } = require('./policy.cjs');
 

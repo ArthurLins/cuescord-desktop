@@ -134,6 +134,15 @@ publicando outro tipo de arquivo. Quem pula a release de transição continua at
 pelos instaladores/ZIPs legados. Falha em pacote anunciado nunca abre um instalador
 como fallback. Linux/macOS mantêm o fluxo normal de instalação do sistema.
 
+Exceção dos clientes Windows 0.4.10 e 0.4.11: seu atualizador usa o sistema de
+arquivos virtual do Electron ao extrair `app.asar` e falha com `Invalid package`.
+Instale 0.4.12 ou posterior pelo instalador Windows uma vez, preservando o perfil
+e o diretório da instalação. O código corrigido usa `original-fs` somente no
+atualizador. Não substitua assets/tags anteriores nem remova checks para migrar.
+O workflow exige `CUESCORD_REQUIRE_APPLICATION_TEST=1` no aceite de interface
+Windows após empacotar; esse teste verifica o ASAR real com código-fonte e código
+empacotado, além de hashes, Internet marks e recusa de adulteração.
+
 ## Publicar
 
 Antes da primeira release com atualizador, configure **UPDATE_SIGNING_PRIVATE_KEY**

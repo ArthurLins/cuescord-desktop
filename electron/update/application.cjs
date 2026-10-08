@@ -1,4 +1,4 @@
-const fs = require('node:fs/promises');
+const fs = require('./filesystem.cjs').promises;
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 
