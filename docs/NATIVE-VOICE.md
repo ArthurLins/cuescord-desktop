@@ -285,7 +285,7 @@ o motor efetivo e o modelo/driver do headset. Fones Bluetooth podem trocar perfi
 ao abrir o microfone, o que exige distinguir alteração de perfil da atenuação.
 
 Validação local em 08/10/2026: backend Windows x64 compilado com a substituição,
-quatro suítes C++ e 110 testes do desktop aprovados; geração/sintaxe do preload
-aprovadas. A DLL real inicializou WASAPI/factory, enumerou dois endpoints e
-encerrou sem abrir captura ou reprodução. Esse smoke test verifica carregamento
+quatro suítes C++, 110 testes do desktop e 26 testes de interface no Electron/Chromium
+aprovados; geração/sintaxe do preload aprovadas. A DLL real inicializou WASAPI/factory,
+enumerou dois endpoints e encerrou sem abrir captura ou reprodução. Esse smoke test verifica carregamento
 e ciclo de vida; o aceite auditivo da chamada real permanece pendente.

@@ -24,6 +24,7 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
     ],
     env: { ...process.env, CUESCORD_DESKTOP_URL: origin },
   });
+  const child = client.process();
   try {
     const page = await client.firstWindow();
     await expect(page.getByRole('heading', { name: 'Desktop presence' })).toBeVisible();
@@ -124,8 +125,8 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
       );
     });
     await expect.poll(() => page.isClosed()).toBe(true);
+    await expect.poll(() => child.exitCode).toBe(0);
   } finally {
-    const child = client.process();
     if (child.exitCode === null)
       spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
         windowsHide: true,

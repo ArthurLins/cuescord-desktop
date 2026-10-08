@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.11
+
+- Corrige a categoria dos fluxos de captura e reprodução da voz nativa no Windows para não acionar a redução automática do volume de outros aplicativos ao entrar em chamada.
+- Aplica a mesma política ao reabrir dispositivos e recuperar o áudio, preservando os volumes e as preferências de comunicação escolhidos pelo usuário.
+- Valida a configuração de áudio no build e corrige o encerramento do teste de bandeja no Electron real.
+
 ## 0.4.10
 
 - Adiciona atualização completa pelo aplicativo no Windows x64, com confirmação, espera pelo fechamento, reinício automático e recuperação da versão anterior em falha de startup.
