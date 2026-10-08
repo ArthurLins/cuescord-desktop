@@ -31,10 +31,41 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 O contrato público mantém nomes/unidades da web: mute/deafen/PTT, modo de entrada,
 atividade automática/manual, limiar 0–100 e volumes 0–200. IDs WASAPI e IDs web
 são persistidos separadamente. Deafen fecha o microfone e silencia somente voz.
-Volume global e volume por participante são aplicados no nativo. O reforço de vozes
-baixas preserva a opção da web: +6 dB, com proteção de picos e recuperação de ganho
+Volume geral da chamada e volume por participante são aplicados no nativo. O
+reforço de vozes baixas preserva a opção da web: +6 dB, com proteção de picos e recuperação de ganho
 em 80 ms. O limitador final do mix conserva 1 dB de margem. As implementações DSP
 da web e nativa não produzem amostras idênticas; escolhas e unidades são comuns.
+
+## Volume do computador
+
+Entrar, sair, silenciar ou reconectar a voz nativa não deve modificar o volume
+do Windows nem dos demais aplicativos. Ganho de entrada/saída, AGC2 e reforço de
+vozes operam nas amostras da chamada; não escrevem volume do endpoint, mixer de
+outros processos ou a preferência global de comunicações do Windows.
+
+O ADM2 do WebRTC fixado abre **captura e reprodução** com
+`AudioCategory_Communications`, o que pode acionar a redução automática dos
+demais sons ao entrar em chamada. `windows-audio.cmake` compila uma substituição
+da implementação completa de `CoreAudioBase`, da mesma revisão do SDK, trocando
+somente a configuração das propriedades por `audio_session.hpp`. Os dois fluxos
+usam `AudioCategory_Other` antes de inicializar o cliente em modo compartilhado.
+A política também passa pelas reinicializações manuais e automáticas de áudio.
+A seleção do headset/dispositivo de comunicação escolhido pelo usuário continua
+independente dessa categoria. AEC e os filtros de voz do Cuescord continuam ativos
+conforme as preferências; a categoria pode alterar os efeitos de áudio do driver.
+
+Fonte e cabeçalho de ABI têm hashes validados no build. O objeto substituto usa
+o layout release do SDK (`NDEBUG`). A origem, licença e cuidados de atualização
+estão em `native/voice/upstream/README.md`. Não é suficiente chamar
+`IAudioSessionControl2::SetDuckingPreference` na sessão do Cuescord: essa API
+protege a sessão que receberia a redução, não remove a causa nos outros programas.
+Não alterar `UserDuckingPreference`, os volumes ou os dispositivos padrão do usuário.
+
+Referências:
+[categorias de áudio e políticas de comunicação](https://learn.microsoft.com/en-us/windows/win32/coreaudio/communications-audio-format-capabilities),
+[desativação da atenuação na sessão que a recebe](https://learn.microsoft.com/en-us/windows/win32/coreaudio/disabling-the-ducking-experience).
+
+## Transporte e processamento
 
 O renderer mantém autenticação e os comandos existentes Socket.IO. Antes de abrir
 o motor, o bootstrap precisa anunciar `voiceTransportProtocol: 1`. Servidores
@@ -214,6 +245,10 @@ tempo de processamento; ruído sintético não comprova qualidade de fala real.
 `VoiceGateTests` cobre RNNoise + AGC + ganho de 200%, mute/PTT e sobrecarga do filtro.
 `VoiceQualityTests` cobre forma de onda, margem, mix/deafen e recuperação com
 silêncio, perda de rede, aceleração persistente e contadores reiniciados.
+`VoiceAudioSessionTests` verifica categoria sem atenuação em entrada/saída e
+reaberturas, propriedades de processamento, propagação de erro e ausência de
+operações de dispositivo/volume. É um teste com cliente WASAPI simulado; não
+substitui a observação do mixer numa chamada real.
 Rust/C++ ligam estaticamente o runtime C, sem exigir instalação separada do
 Visual C++ Redistributable. O build seleciona explicitamente Rust 1.94.0.
 `pnpm desktop:build:win` exige o motor e inclui seus avisos no instalador.
@@ -240,3 +275,17 @@ simultâneos, troca e desconexão de dispositivo, perda de rede, morte do helper
 suspensão e jogo carregando com app minimizado por pelo menos 30 minutos. Conferir
 aproximadamente 100 blocos por segundo e ausência de voz acelerada. O teste local
 não substitui esse aceite nos equipamentos onde o problema original ocorre.
+
+Para aceitar a correção de volume, manter música/vídeo em outro aplicativo e
+observar seu volume e o volume do dispositivo antes/durante/depois de uma chamada
+nativa. Cobrir entrada, saída, mute/deafen, troca de dispositivo e reconexão, com
+um interlocutor real. Usar a preferência de comunicações já configurada pelo
+usuário; não desativar globalmente a redução para fazer o teste passar. Registrar
+o motor efetivo e o modelo/driver do headset. Fones Bluetooth podem trocar perfil
+ao abrir o microfone, o que exige distinguir alteração de perfil da atenuação.
+
+Validação local em 08/10/2026: backend Windows x64 compilado com a substituição,
+quatro suítes C++ e 110 testes do desktop aprovados; geração/sintaxe do preload
+aprovadas. A DLL real inicializou WASAPI/factory, enumerou dois endpoints e
+encerrou sem abrir captura ou reprodução. Esse smoke test verifica carregamento
+e ciclo de vida; o aceite auditivo da chamada real permanece pendente.

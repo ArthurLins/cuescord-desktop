@@ -1,0 +1,27 @@
+# Replace only the pinned CoreAudioBase object. The prebuilt libwebrtc archive
+# keeps its other objects; our definition is linked before that archive.
+# Both directions and every automatic/manual restart use CoreAudioBase::Init.
+set(audio_base "${CMAKE_CURRENT_SOURCE_DIR}/upstream/core_audio_base_win.cc")
+set(audio_abi_header "${LIBWEBRTC_INCLUDE_PATH}/modules/audio_device/win/core_audio_base_win.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${audio_base}" "${audio_abi_header}")
+file(READ "${audio_base}" audio_source)
+string(REPLACE "\r\n" "\n" audio_source "${audio_source}")
+string(SHA256 source_hash "${audio_source}")
+if(NOT source_hash STREQUAL "55714d27b8f96f13d880ed7f99e676a90a5447289edccf6ac583a7936c8c8885")
+  message(FATAL_ERROR "Pinned WebRTC CoreAudioBase source changed; review the audio policy overlay")
+endif()
+file(READ "${audio_abi_header}" audio_header)
+string(REPLACE "\r\n" "\n" audio_header "${audio_header}")
+string(SHA256 header_hash "${audio_header}")
+if(NOT header_hash STREQUAL "723e2615a5eba9f5396393bfa83d318d5bad0827cba1892e0384d000b78b73d8")
+  message(FATAL_ERROR "Pinned WebRTC CoreAudioBase ABI changed; review the audio policy overlay")
+endif()
+set(original "core_audio_utility::SetClientProperties(")
+string(FIND "${audio_source}" "${original}" policy_position)
+if(policy_position LESS 0)
+  message(FATAL_ERROR "Pinned WebRTC audio policy context changed")
+endif()
+string(REPLACE "${original}" "cuescord::ConfigureCallAudio(" audio_source "${audio_source}")
+set(CUESCORD_CORE_AUDIO_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/cuescord_core_audio_base_win.cc")
+file(CONFIGURE OUTPUT "${CUESCORD_CORE_AUDIO_SOURCE}"
+  CONTENT "#include \"audio_session.hpp\"\n${audio_source}" @ONLY)

@@ -98,12 +98,14 @@ run(cmake, [
   'VoiceGateTests',
   'VoiceNoiseTests',
   'VoiceQualityTests',
+  'VoiceAudioSessionTests',
   '--parallel',
   '4',
 ]);
 run(path.join(build, 'Release/VoiceGateTests.exe'), []);
 run(path.join(build, 'Release/VoiceNoiseTests.exe'), []);
 run(path.join(build, 'Release/VoiceQualityTests.exe'), []);
+run(path.join(build, 'Release/VoiceAudioSessionTests.exe'), []);
 const env = {
   ...process.env,
   CARGO_HOME: path.join(root, '.cache/cargo'),
