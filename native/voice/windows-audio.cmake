@@ -22,6 +22,14 @@ if(policy_position LESS 0)
   message(FATAL_ERROR "Pinned WebRTC audio policy context changed")
 endif()
 string(REPLACE "${original}" "cuescord::ConfigureCallAudio(" audio_source "${audio_source}")
+set(initialized "  // Check device period and the preferred buffer size and log a warning if")
+string(FIND "${audio_source}" "${initialized}" initialized_position)
+if(initialized_position LESS 0)
+  message(FATAL_ERROR "Pinned WebRTC stream initialization context changed")
+endif()
+string(REPLACE "${initialized}"
+  "  if (!IsInput() && FAILED(cuescord::PreventOtherAudioAttenuation(audio_client.Get()))) {\n    return false;\n  }\n\n${initialized}"
+  audio_source "${audio_source}")
 set(CUESCORD_CORE_AUDIO_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/cuescord_core_audio_base_win.cc")
 file(CONFIGURE OUTPUT "${CUESCORD_CORE_AUDIO_SOURCE}"
   CONTENT "#include \"audio_session.hpp\"\n${audio_source}" @ONLY)

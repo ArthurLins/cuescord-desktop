@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.13
+
+- Corrige a redução do volume de outros aplicativos no Windows quando outra pessoa atende uma chamada nativa do Cuescord, inclusive nos sistemas em que a categoria de áudio sem comunicações ainda acionava atenuação.
+- Aplica a proteção explícita de reprodução automaticamente a cada abertura e reconexão da chamada, preservando os volumes dos demais aplicativos e as preferências de áudio do Windows. Versões do Windows sem esse serviço mantêm a categoria de áudio compatível.
+- Valida a política com testes de reabertura, erros e compatibilidade, além de chamada real com música/vídeo em outro aplicativo.
+
 ## 0.4.12
 
 - Corrige o erro `Invalid package ... app.asar` ao extrair, verificar e preparar a atualização completa no Electron, usando acesso aos bytes reais do arquivo.

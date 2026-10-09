@@ -54,6 +54,15 @@ A seleção do headset/dispositivo de comunicação escolhido pelo usuário cont
 independente dessa categoria. AEC e os filtros de voz do Cuescord continuam ativos
 conforme as preferências; a categoria pode alterar os efeitos de áudio do driver.
 
+Na reprodução, depois de inicializar WASAPI e antes de iniciar o fluxo, a política
+também solicita `IAudioClientDuckingControl` e aplica
+`AUDIO_DUCKING_OPTIONS_DO_NOT_DUCK_OTHER_STREAMS`. Esse controle pertence somente
+ao fluxo do Cuescord e impede que ele reduza os demais sons. A categoria `Other`
+isoladamente não impediu a queda observada no Windows 11 deste equipamento.
+A proteção é reaplicada nas reaberturas. Windows anteriores ao suporte desse
+serviço (`E_NOINTERFACE`) continuam usando a categoria `Other`; outros erros
+interrompem a inicialização antes de começar a reprodução.
+
 Fonte e cabeçalho de ABI têm hashes validados no build. O objeto substituto usa
 o layout release do SDK (`NDEBUG`). A origem, licença e cuidados de atualização
 estão em `native/voice/upstream/README.md`. Não é suficiente chamar
@@ -247,7 +256,9 @@ tempo de processamento; ruído sintético não comprova qualidade de fala real.
 silêncio, perda de rede, aceleração persistente e contadores reiniciados.
 `VoiceAudioSessionTests` verifica categoria sem atenuação em entrada/saída e
 reaberturas, propriedades de processamento, propagação de erro e ausência de
-operações de dispositivo/volume. É um teste com cliente WASAPI simulado; não
+operações de dispositivo/volume. Também verifica a proteção do fluxo de reprodução,
+a liberação do serviço e a compatibilidade com Windows sem esse serviço.
+É um teste com cliente WASAPI simulado; não
 substitui a observação do mixer numa chamada real.
 Rust/C++ ligam estaticamente o runtime C, sem exigir instalação separada do
 Visual C++ Redistributable. O build seleciona explicitamente Rust 1.94.0.
@@ -289,3 +300,14 @@ quatro suítes C++, 110 testes do desktop e 26 testes de interface no Electron/C
 aprovados; geração/sintaxe do preload aprovadas. A DLL real inicializou WASAPI/factory,
 enumerou dois endpoints e encerrou sem abrir captura ou reprodução. Esse smoke test verifica carregamento
 e ciclo de vida; o aceite auditivo da chamada real permanece pendente.
+
+Validação local em 09/10/2026: instalador Windows gerado com proteção explícita do
+fluxo de reprodução; quatro suítes C++, testes Rust, 110 testes do desktop,
+28 testes de interface e dois testes de extração/staging no Electron aprovados.
+O serviço de ducking do cliente WASAPI real aceitou a proteção. A instalação local
+foi conferida contra os 107 arquivos do pacote, preservando perfil e cópia de
+recuperação. Numa chamada real com Arctis Nova 7 USB e Discord encerrado, o usuário
+confirmou que música/vídeo de outro aplicativo manteve volume normal. Uma amostra
+com reprodução nativa ativa e silenciosa também apresentou razão próxima de 1
+entre o pico do Edge e o pico da saída, em vez da redução anterior para 0,126.
+Esse aceite local não substitui os testes amplos de resiliência em outros PCs.
