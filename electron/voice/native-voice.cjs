@@ -16,6 +16,7 @@ function installNativeVoice({
   filesExist = existsSync,
   requestTimeoutMs = 12000,
   onActiveChanged,
+  getPushToTalk,
 }) {
   const contents = window.webContents;
   const folder = app.isPackaged
@@ -185,6 +186,10 @@ function installNativeVoice({
       current.pending.size >= 64
     )
       return Promise.reject(new Error('Invalid native voice request'));
+    // Main-process button state is authoritative. A delayed renderer update
+    // must never reopen the microphone after a global button release.
+    if (method === 'configure' && getPushToTalk?.()?.global)
+      data = { ...data, ptt: getPushToTalk().pressed };
     const id = ++nextId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -260,6 +265,17 @@ function installNativeVoice({
     app.removeListener('before-quit', quitting);
   });
   app.on('before-quit', quitting);
-  return { stop };
+  return {
+    stop,
+    setPushToTalk(pressed) {
+      const current = session;
+      if (current?.ready)
+        void request(current.id, 'configure', { ptt: pressed }).catch(() => {
+          // Never leave capture open if the helper cannot accept a release,
+          // including a saturated command queue. Only revoke this helper.
+          if (!pressed && session === current) stop('ptt-release-failed');
+        });
+    },
+  };
 }
 module.exports = { installNativeVoice };

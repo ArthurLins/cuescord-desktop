@@ -18,6 +18,15 @@ chamada, inclusive mutada; não ativam dispositivos. Saída, recarga ou falha do
 renderer restauram a limitação. Fechar a janela a oculta na bandeja,
 mantendo a sessão e uma chamada ativa. O menu **Fechar Cuescord** encerra o processo.
 
+No Windows, o frame principal confiável pode configurar uma tecla ou botão de
+mouse para push to talk. O processo principal consulta somente esse botão enquanto
+o controle está habilitado na chamada; não registra teclas, textos ou histórico
+de entrada. A ponte expõe configuração validada e transições do botão, sem acesso
+genérico ao teclado, FFI ou sistema. Gravação do atalho, saída, navegação, falha do
+renderer, bloqueio e suspensão liberam a transmissão. A liberação chega ao motor
+nativo diretamente; se ele não aceitar o comando, a captura é encerrada.
+Veja [docs/PUSH-TO-TALK.md](docs/PUSH-TO-TALK.md).
+
 A origem principal pode solicitar microfone, câmera, notificações, clipboard,
 fullscreen e captura. Permissões desconhecidas e outras origens são negadas.
 A autorização do Electron não elimina prompts/restrições do sistema operacional.

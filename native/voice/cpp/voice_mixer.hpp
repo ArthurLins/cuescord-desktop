@@ -12,7 +12,7 @@ class VoiceMixer : public webrtc::AudioMixer {
   Controls& controls;
   webrtc::scoped_refptr<webrtc::AudioMixerImpl> mixer = webrtc::AudioMixerImpl::Create();
   PeakLimiter limiter;
-  std::array<float, 960> scratch{};
+  std::array<std::array<float, 480>, 2> scratch{};
 
  public:
   explicit VoiceMixer(Controls& controls) : controls(controls) {}
@@ -24,22 +24,27 @@ class VoiceMixer : public webrtc::AudioMixer {
     controls.renderMmcssInherited = priority.inherited;
     controls.renderPriorityError = priority.error;
     mixer->Mix(channels, frame);
-    const auto count = frame->samples_per_channel() * frame->num_channels();
+    const auto count = frame->samples_per_channel(), channelCount = frame->num_channels();
     // A mismatched SDK format must never read beyond the fixed scratch buffer.
-    if (count > scratch.size()) {
+    if (count > scratch[0].size() || channelCount == 0 || channelCount > scratch.size()) {
       frame->Mute();
+      limiter.reset();
       return;
     }
     auto* samples = frame->mutable_data();
-    for (size_t i = 0; i < count; ++i) scratch[i] = samples[i];
-    float* buffers[] = {scratch.data()};
+    for (size_t i = 0; i < count; ++i)
+      for (size_t c = 0; c < channelCount; ++c) scratch[c][i] = samples[i * channelCount + c];
+    float* buffers[] = {scratch[0].data(), scratch[1].data()};
     const float gain = controls.deafened.load()
                            ? 0
                            : controls.output.load() * (controls.voiceBoost.load() ? 2 : 1);
-    const float attenuation = limiter.process(buffers, 1, count, gain);
+    const float attenuation =
+        limiter.process(buffers, channelCount, count, gain, frame->sample_rate_hz());
     controls.renderLimiterGain = attenuation;
     if (attenuation < 0.999f) ++controls.limitedRenderFrames;
-    for (size_t i = 0; i < count; ++i) samples[i] = static_cast<int16_t>(std::lround(scratch[i]));
+    for (size_t i = 0; i < count; ++i)
+      for (size_t c = 0; c < channelCount; ++c)
+        samples[i * channelCount + c] = static_cast<int16_t>(std::lround(scratch[c][i]));
     ++controls.renderFrames;
   }
 };

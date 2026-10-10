@@ -6,7 +6,7 @@ Consulte package.json e pnpm-lock.yaml para versões e integridades exatas.
 | Componente | Papel | Licença / fonte |
 | --- | --- | --- |
 | Electron | Runtime Chromium + Node | MIT e avisos dos componentes: https://github.com/electron/electron |
-| Koffi | Ponte FFI para resolver processos no Windows | MIT: https://github.com/Koromix/koffi |
+| Koffi | Ponte FFI para resolver processos e ler o botão de push to talk no Windows | MIT: https://github.com/Koromix/koffi |
 | loopback-capture | Captura WASAPI Process Loopback | MIT: https://github.com/WerdoxDev/loopback-capture |
 | electron-builder | Empacotamento, usado no build | MIT: https://github.com/electron-userland/electron-builder |
 | Playwright | Ferramentas das suites existentes | Apache-2.0: https://github.com/microsoft/playwright |

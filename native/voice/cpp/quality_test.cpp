@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 #include "voice_health.hpp"
 #include "voice_mixer.hpp"
@@ -21,6 +22,100 @@ class Tone final : public webrtc::AudioMixer::Source {
   int Ssrc() const override { return 1; }
   int PreferredSampleRate() const override { return 48000; }
 };
+static void checkDynamics() {
+  constexpr double pi = 3.141592653589793;
+  // Arbitrary callback partitions must produce the same waveform and timing.
+  std::vector<float> input(12000), whole, partitioned;
+  for (size_t i = 0; i < input.size(); ++i)
+    input[i] = float((18000 + 8000 * std::sin(2 * pi * 7 * i / 48000)) *
+                     std::cos(2 * pi * 173 * i / 48000 + .5));
+  whole = partitioned = input;
+  PeakLimiter a, b;
+  float* full[] = {whole.data()};
+  a.process(full, 1, whole.size(), 2);
+  size_t at = 0;
+  for (size_t block = 1; at < partitioned.size(); ++block) {
+    const size_t count = std::min((block * 137) % 481 + 1, partitioned.size() - at);
+    float* chunk[] = {partitioned.data() + at};
+    b.process(chunk, 1, count, 2);
+    at += count;
+  }
+  double biggestArtifact = 0;
+  for (size_t i = 0; i < whole.size(); ++i) {
+    check(whole[i] == partitioned[i], "limiting must be independent of callback boundaries");
+    check(std::isfinite(whole[i]) && std::abs(whole[i]) <= 29204,
+          "loud voice must keep protected peaks without clipping");
+    if (i < 1000) continue;
+    const double delayed = input[i - 240];
+    if (std::abs(delayed) > 1) {
+      const double currentGain = whole[i] / delayed;
+      if (std::abs(input[i - 241]) > 1) {
+        const double previousGain = whole[i - 1] / double(input[i - 241]);
+        biggestArtifact =
+            std::max(biggestArtifact, std::abs(delayed * (currentGain - previousGain)));
+      }
+    }
+  }
+  check(biggestArtifact < 200,
+        "smooth limiting must remove the multi-thousand-unit gain jumps from voiced signals");
+  std::cout << "Maximum smooth-limiter gain step: " << biggestArtifact << '\n';
+
+  for (int rate : {8000, 16000, 32000, 48000}) {
+    PeakLimiter limiter;
+    const size_t count = size_t(rate / 100), latency = size_t(rate / 200);
+    std::array<float, 480> left{}, right{};
+    float* stereo[] = {left.data(), right.data()};
+    // Quiet stereo must stay transparent after the startup ramp and fixed delay.
+    for (int frame = 0; frame < 4; ++frame) {
+      left.fill(1000);
+      right.fill(2000);
+      limiter.process(stereo, 2, count, 1, rate);
+      for (size_t i = 0; i < count; ++i) {
+        check(right[i] == left[i] * 2, "stereo channels must share one gain and delay");
+        if (frame > 0) check(left[i] == 1000, "quiet audio must retain its level and samples");
+      }
+    }
+    // One-sample, alternating and random peaks must be caught, even near block edges.
+    uint32_t random = 34567;
+    for (int frame = 0; frame < 100; ++frame) {
+      for (size_t i = 0; i < count; ++i) {
+        random = random * 1664525u + 1013904223u;
+        left[i] =
+            frame < 3 ? (i == count - 1 ? 32767.0f : 100.0f) : float(int32_t(random >> 16) - 32768);
+        right[i] = -left[i] * .5f;
+      }
+      limiter.process(stereo, 2, count, 4, rate);
+      for (size_t i = 0; i < count; ++i) {
+        check(std::abs(left[i]) <= 29204 && std::abs(right[i]) <= 29204,
+              "look-ahead must catch short and random peaks in either stereo channel");
+        if (frame > 0 || i >= latency)
+          check(std::abs(right[i] + left[i] * .5f) < .01f,
+                "limiting must preserve the stereo image under overload");
+      }
+    }
+    left.fill(std::numeric_limits<float>::quiet_NaN());
+    right.fill(std::numeric_limits<float>::infinity());
+    limiter.process(stereo, 2, count, 1, rate);
+    for (size_t i = 0; i < count; ++i)
+      check(std::isfinite(left[i]) && std::isfinite(right[i]), "invalid samples must be sanitized");
+    limiter.process(stereo, 2, count, 0, rate);
+    for (size_t i = 0; i < count; ++i)
+      check(left[i] == 0 && right[i] == 0, "mute must immediately flush both channels");
+    limiter.process(stereo, 2, count, 1, rate);
+    for (size_t i = 0; i < count; ++i)
+      check(left[i] == 0 && right[i] == 0, "unmute must never emit a pre-mute sample");
+  }
+  // A source/device format change cannot play samples from the previous format.
+  PeakLimiter format;
+  std::array<float, 480> audio{};
+  float* channel[] = {audio.data()};
+  audio.fill(20000);
+  format.process(channel, 1, 480, 1);
+  audio.fill(0);
+  format.process(channel, 1, 160, 1, 16000);
+  for (size_t i = 0; i < 160; ++i)
+    check(audio[i] == 0, "a rate change must reset all limiter history");
+}
 int main() {
   try {
 #ifdef _WIN32
@@ -38,24 +133,7 @@ int main() {
             "MMCSS must be released by its actual owner");
     }
 #endif
-    PeakLimiter limiter;
-    std::array<float, 480> samples{};
-    float* channels[] = {samples.data()};
-    for (size_t i = 0; i < samples.size(); ++i) samples[i] = 25000 * std::sin(i * 0.1);
-    const auto original = samples;
-    const float reduction = limiter.process(channels, 1, samples.size(), 2);
-    check(reduction < 1, "200% gain must activate peak protection");
-    for (size_t i = 0; i < samples.size(); ++i) {
-      check(std::abs(samples[i]) <= 29205, "peaks must retain headroom");
-      check(std::abs(samples[i] - original[i] * 2 * reduction) < 0.02,
-            "limiting must preserve waveform shape");
-    }
-    samples.fill(std::numeric_limits<float>::quiet_NaN());
-    limiter.process(channels, 1, samples.size(), 1);
-    check(samples[0] == 0, "invalid values must never reach the output");
-    samples.fill(1000);
-    limiter.process(channels, 1, samples.size(), 0);
-    check(samples[0] == 0, "mute must immediately revoke audio");
+    checkDynamics();
     QualityWatchdog health;
     check(health.observe(0, true, true) == RecoveryDecision::None, "startup needs warmup");
     check(health.observe(10000, true, true) == RecoveryDecision::None,
@@ -125,6 +203,11 @@ int main() {
     mixer->Mix(1, &frame);
     for (size_t i = 0; i < frame.samples_per_channel(); ++i)
       check(frame.data()[i] == 0, "deafen must silence the native mix");
+    controls.deafened = false;
+    mixer->Mix(2, &frame);
+    for (size_t i = 0; i < frame.samples_per_channel() * frame.num_channels(); ++i)
+      check(std::abs(int(frame.data()[i])) <= 29205,
+            "stereo playback after deafen must keep linked peak protection");
     mixer->RemoveSource(&tone);
     std::cout << "Voice dynamics, playback and bounded recovery passed\n";
   } catch (const std::exception& e) {

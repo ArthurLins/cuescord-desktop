@@ -17,6 +17,7 @@ module.exports = {
   directories: { output: 'release', buildResources: 'assets' },
   files: [
     'electron/**/*',
+    'renderer/push-to-talk-binding.cjs',
     'dist/preload.cjs',
     'dist/updater-preload.cjs',
     'assets/icons/**/*',

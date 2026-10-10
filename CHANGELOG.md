@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.14
+
+- Suaviza as mudanças de ganho e a abertura/fechamento por atividade de voz para reduzir estalos; o limitador passa a acompanhar picos por amostra com antecipação de 5 ms na captura e na reprodução.
+- Mantém mute, deafen, volume zero e liberação do push to talk imediatos, descartando áudio pendente para não transmitir a cauda anterior.
+- Adiciona push to talk global no Windows para teclado e os cinco botões do mouse, com interface web compatível, inclusive com o aplicativo minimizado ou oculto na bandeja.
+- Envia a liberação diretamente ao motor nativo e impede que comandos atrasados reabram o microfone; troca de atalho, gravação, bloqueio, suspensão e encerramento liberam o estado.
+- Amplia testes de continuidade do áudio, isolamento, eventos atrasados e funcionamento da ponte no Electron real.
+
 ## 0.4.13
 
 - Corrige a redução do volume de outros aplicativos no Windows quando outra pessoa atende uma chamada nativa do Cuescord, inclusive nos sistemas em que a categoria de áudio sem comunicações ainda acionava atenuação.

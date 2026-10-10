@@ -51,6 +51,7 @@ class Gate final : public webrtc::CustomProcessing {
   webrtc::Environment environment = webrtc::CreateEnvironment();
   webrtc::scoped_refptr<webrtc::AudioProcessing> gainController;
   std::array<std::array<float, 480>, 2> gainScratch{};
+  GainRamp activityGain;
   PeakLimiter limiter;
   std::chrono::steady_clock::time_point previousFrame{};
 
@@ -72,7 +73,8 @@ class Gate final : public webrtc::CustomProcessing {
     noise.initialize(rate, channels);
     controls.noiseActive = false;
     slowNoiseFrames = 0;
-    limiter.reset();
+    activityGain.reset();
+    limiter.initialize(rate, channels);
     previousFrame = {};
     webrtc::AudioProcessing::Config config;
     config.gain_controller2.enabled = true;
@@ -181,6 +183,8 @@ class Gate final : public webrtc::CustomProcessing {
       release = 0;
       delay.fill(0);
       delayIndex = 0;
+      activityGain.reset();
+      limiter.reset();
       if (vad) {
         WebRtcVad_Init(vad.get());
         WebRtcVad_set_mode(vad.get(), 3);
@@ -208,11 +212,13 @@ class Gate final : public webrtc::CustomProcessing {
     else if (release > 0)
       --release;
     const bool active = controls.activity.load() ? release > 0 : controls.ptt.load();
-    const float gain = enabled && active ? controls.input.load() : 0;
-    controls.transmitting.store(gain > 0);
-    controls.speaking.store(gain > 0 && level >= 2);
-    for (size_t c = 0; c < audio->num_channels(); ++c)
-      for (size_t i = 0; i < count; ++i) {
+    // Fade natural activity openings/closures over 5 ms. Explicit mute, deafen,
+    // zero volume and PTT release bypass fades and flush all buffered voice.
+    activityGain.setTarget(enabled && active ? 1 : 0, size_t(std::max(1, sampleRate / 200)));
+    bool audibleOutput = false;
+    for (size_t i = 0; i < count; ++i) {
+      const float envelope = enabled ? activityGain.next() : 0;
+      for (size_t c = 0; c < audio->num_channels(); ++c) {
         float value = audio->channels()[c][i];
         if (!std::isfinite(value)) value = 0;
         if (automatic && enabled) {
@@ -221,10 +227,16 @@ class Gate final : public webrtc::CustomProcessing {
           delayIndex = (delayIndex + 1) % delay.size();
           value = delayed;
         }
-        audio->channels()[c][i] = value;
+        audio->channels()[c][i] = value * envelope;
       }
-    const float attenuation =
-        limiter.process(audio->channels(), audio->num_channels(), count, gain);
+    }
+    const float attenuation = limiter.process(audio->channels(), audio->num_channels(), count,
+                                              enabled ? controls.input.load() : 0, sampleRate);
+    for (size_t c = 0; c < audio->num_channels(); ++c)
+      for (size_t i = 0; i < count; ++i)
+        audibleOutput = audibleOutput || audio->channels()[c][i] != 0;
+    controls.transmitting.store(enabled && (active || audibleOutput));
+    controls.speaking.store(enabled && audibleOutput && level >= 2);
     controls.captureLimiterGain = attenuation;
     if (attenuation < 0.999f) ++controls.limitedCaptureFrames;
     controls.frames.fetch_add(1);

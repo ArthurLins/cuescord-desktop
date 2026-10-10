@@ -10,6 +10,88 @@ const require = createRequire(import.meta.url);
 const { validCommand, MAX_MESSAGE } = require('../electron/voice/protocol.cjs');
 const { installNativeVoice } = require('../electron/voice/native-voice.cjs');
 
+test(
+  'main-process PTT release reaches audio without renderer and rejects delayed renderer presses',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const app = Object.assign(new EventEmitter(), { isPackaged: false });
+    const contents = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      send() {},
+      getBackgroundThrottling: () => true,
+      setBackgroundThrottling() {},
+    });
+    const frame = { url: 'https://cuescord.cuesc.net/app', isDestroyed: () => false };
+    contents.mainFrame = frame;
+    const handlers = new Map();
+    const child = Object.assign(new EventEmitter(), {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      kill() {},
+    });
+    const controls = [];
+    let reply = true;
+    child.stdin.on('data', (chunk) => {
+      const command = JSON.parse(chunk.toString());
+      controls.push(command.data);
+      if (reply)
+        child.stdout.write(JSON.stringify({ type: 'response', id: command.id, data: {} }) + '\n');
+    });
+    let pressed = false;
+    const voice = installNativeVoice({
+      app,
+      ipcMain: {
+        handle: (key, fn) => handlers.set(key, fn),
+        removeHandler: (key) => handlers.delete(key),
+      },
+      window: { webContents: contents, isDestroyed: () => false },
+      trustedUrl: frame.url,
+      filesExist: () => true,
+      spawnHelper: () => child,
+      getPushToTalk: () => ({ global: true, pressed }),
+    });
+    const invoke = (name, ...args) =>
+      handlers.get('cuescord:voice:' + name)({ sender: contents, senderFrame: frame }, ...args);
+    const opening = invoke('open');
+    child.stdout.write(JSON.stringify({ type: 'ready', protocol: 1, media: ['voice'] }) + '\n');
+    const ready = await opening;
+    await invoke('request', {
+      sessionId: ready.sessionId,
+      method: 'configure',
+      data: { inputMode: 'push-to-talk', ptt: true },
+    });
+    pressed = true;
+    voice.setPushToTalk(true);
+    pressed = false;
+    voice.setPushToTalk(false);
+    await invoke('request', {
+      sessionId: ready.sessionId,
+      method: 'configure',
+      data: { ptt: true, inputVolume: 120 },
+    });
+    assert.deepEqual(
+      controls.map((value) => value.ptt),
+      [false, true, false, false],
+    );
+    assert.equal(controls.at(-1).inputVolume, 120);
+    reply = false;
+    const pending = Array.from({ length: 64 }, () =>
+      invoke('request', { sessionId: ready.sessionId, method: 'stats', data: {} }),
+    );
+    const settled = Promise.allSettled(pending);
+    voice.setPushToTalk(false);
+    await Promise.resolve();
+    assert.equal(invoke('status').active, false, 'a saturated queue cannot leave capture open');
+    assert.equal(invoke('status').lastStopReason, 'ptt-release-failed');
+    assert.equal(
+      (await settled).every((value) => value.status === 'rejected'),
+      true,
+    );
+    voice.stop();
+    contents.emit('destroyed');
+  },
+);
+
 test('voice controls preserve units and reject malformed or excessive input', () => {
   assert.equal(
     validCommand('configure', {

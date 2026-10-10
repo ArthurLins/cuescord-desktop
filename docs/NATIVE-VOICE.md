@@ -20,7 +20,7 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/engine.cpp`: threads, mídia, sinalização e ciclo de vida.
 - `native/voice/cpp/audio_devices.hpp`: seleção e recuperação de dispositivos.
 - `native/voice/cpp/audio_gate.hpp`: mute, PTT, VAD, ganho e medição na captura.
-- `native/voice/cpp/voice_dynamics.hpp`: proteção de picos sem fila de áudio.
+- `native/voice/cpp/voice_dynamics.hpp`: rampas de ganho e limitador com antecipação de 5 ms.
 - `native/voice/cpp/voice_mixer.hpp`: volume e reforço das vozes recebidas.
 - `native/voice/cpp/voice_health.hpp`: medição e recuperação limitada da qualidade.
 - `native/voice/cpp/audio_priority.hpp`: registro MMCSS na thread de áudio.
@@ -35,6 +35,12 @@ Volume geral da chamada e volume por participante são aplicados no nativo. O
 reforço de vozes baixas preserva a opção da web: +6 dB, com proteção de picos e recuperação de ganho
 em 80 ms. O limitador final do mix conserva 1 dB de margem. As implementações DSP
 da web e nativa não produzem amostras idênticas; escolhas e unidades são comuns.
+
+O push to talk global no Windows recebe o estado de teclado/mouse do processo
+principal do desktop, sem depender do foco da janela ou da entrega de eventos
+pelo renderer. A liberação prevalece sobre controles atrasados; impossibilidade
+de entregar a liberação encerra o helper. A configuração exige interface web
+compatível. Consulte [PUSH-TO-TALK.md](PUSH-TO-TALK.md) para contrato e aceite.
 
 ## Volume do computador
 
@@ -95,7 +101,7 @@ aplicado depois de AEC e antes do AGC2, medição, VAD, mute/PTT e ganho de entr
 AGC2 tem margem de 6 dB, ganho adaptativo máximo de 18 dB e subida limitada a
 3 dB/s. Roda em uma etapa APM pública separada, sem aplicar AEC ou supressão de
 ruído novamente. O ganho manual de até 200% passa por um limitador de picos que
-atenua o bloco inteiro em vez de cortar a forma de onda. Isso protege a saída
+varia a atenuação por amostra, com antecipação de 5 ms. Isso protege a saída
 digital; saturação que já ocorreu no microfone/driver não pode ser desfeita.
 Quando RNNoise está ativo, a supressão do WebRTC fica desligada para não filtrar
 duas vezes. Compartilhamento de tela e seu áudio não passam por esse caminho.
@@ -119,6 +125,35 @@ VAD automático usa modo 3, reserva de 30 ms para o início da fala e retenção
 200 ms, como o gate original. Manual/PTT não acrescentam essa reserva. Mutar,
 desmutar ou trocar o modo limpa a reserva para não transmitir áudio anterior.
 O compressor de reprodução continua específico da voz web.
+
+### Suavização de ganho e prevenção de estalos
+
+O corte por atividade de voz abre e fecha com rampas lineares de 5 ms, depois da
+retenção existente de 200 ms. Ganho de entrada, saída e mudanças do reforço de
+voz também usam rampas de 5 ms. Mute, deafen, volume zero e soltar PTT silenciam
+imediatamente e descartam as amostras pendentes; reabrir não reproduz a cauda
+anterior. As indicações de transmissão incluem a cauda audível do corte natural.
+
+O limitador antecipa picos em 5 ms usando buffers fixos. Calcula a atenuação
+necessária por amostra, mantém o mínimo numa janela e suaviza esse mínimo com
+uma média móvel. Cada termo da média inclui o limite da amostra que está saindo
+do buffer; assim, a suavização não permite que um pico curto ultrapasse a margem
+de 1 dB. A recuperação de ganho tem constante de tempo de 80 ms. O ganho e o
+atraso são comuns aos dois canais, para conservar a imagem estéreo. Mudanças de
+formato limpam o histórico. Não há alocações ou locks no processamento.
+
+Essa antecipação acrescenta 5 ms à captura e 5 ms à reprodução (10 ms no caminho
+completo entre dois clientes), além das latências existentes e da reserva de
+30 ms do VAD automático. O comportamento independe das divisões dos callbacks;
+o limitador recebe o sample rate real da captura/reprodução, entre 8 e 48 kHz.
+Os contadores de limitação consideram a menor atenuação aplicada em cada bloco.
+
+Referências de projeto:
+[rampas contínuas de parâmetros na especificação Web Audio](https://www.w3.org/TR/webaudio-1.0/#dom-audioparam-linearramptovalueattime),
+[suavização de parâmetros no JUCE](https://docs.juce.com/master/classjuce_1_1SmoothedValue.html),
+[Hämäläinen, DAFx-02: controle suave de limitadores sem clipping](https://www.dafx.de/paper-archive/2002/DAFX02_Hamalainen_smoothing_peak_limiters.pdf).
+O filtro de mínimo/média é uma adaptação própria da ideia de antecipação e
+estatísticas de ordem; não reproduz literalmente o algoritmo completo do artigo.
 
 ## Resiliência
 
@@ -251,8 +286,11 @@ local quando suporta LZMA. Os runners de CI já incluem 7-Zip.
 `VoiceNoiseTests` verifica modelo, silêncio, redução de ruído estacionário,
 saída finita, bypass, reinicialização e formato incompatível. O teste mede o
 tempo de processamento; ruído sintético não comprova qualidade de fala real.
-`VoiceGateTests` cobre RNNoise + AGC + ganho de 200%, mute/PTT e sobrecarga do filtro.
-`VoiceQualityTests` cobre forma de onda, margem, mix/deafen e recuperação com
+`VoiceGateTests` cobre RNNoise + AGC + ganho de 200%, mute/PTT, sobrecarga do filtro,
+rampas de abertura/fechamento e descarte da cauda ao soltar PTT.
+`VoiceQualityTests` cobre continuidade por amostra, callbacks com tamanhos distintos,
+picos de uma amostra, áudio aleatório, estéreo e mudanças de formato em 8–48 kHz,
+além de margem, mix/deafen e recuperação com
 silêncio, perda de rede, aceleração persistente e contadores reiniciados.
 `VoiceAudioSessionTests` verifica categoria sem atenuação em entrada/saída e
 reaberturas, propriedades de processamento, propagação de erro e ausência de
@@ -311,3 +349,10 @@ confirmou que música/vídeo de outro aplicativo manteve volume normal. Uma amos
 com reprodução nativa ativa e silenciosa também apresentou razão próxima de 1
 entre o pico do Edge e o pico da saída, em vez da redução anterior para 0,126.
 Esse aceite local não substitui os testes amplos de resiliência em outros PCs.
+
+Para aceitar a suavização, repetir a chamada nos equipamentos onde os estalos
+foram ouvidos, alternando atividade manual/automática e PTT, filtros e reforço de
+voz. Comparar com PTT sem processamento, que o usuário relatou como limpo. Os
+testes de continuidade e sinais sintéticos validam os mecanismos corrigidos;
+não estabelecem a qualidade perceptiva do RNNoise/AGC nem comprovam a eliminação
+de todos os estalos na chamada real.

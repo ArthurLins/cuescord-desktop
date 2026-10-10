@@ -15,7 +15,7 @@ int main() {
   const auto frame = [&](float sample) {
     std::fill_n(audio.channels()[0], audio.num_frames(), sample);
     gate.Process(&audio);
-    return audio.channels()[0][0];
+    return audio.channels()[0][audio.num_frames() - 1];
   };
   try {
     check(frame(4000) == 0, "default must be muted");
@@ -86,7 +86,43 @@ int main() {
     automatic.ptt = true;
     std::fill_n(audio.channels()[0], audio.num_frames(), 4000.0f);
     onsetGate.Process(&audio);
-    check(audio.channels()[0][0] == 4000, "PTT must keep its original undelayed path");
+    check(audio.channels()[0][0] == 0 && audio.channels()[0][479] > 3900,
+          "PTT must flush the automatic onset buffer and open within one 10ms frame");
+    Controls smooth;
+    smooth.muted = false;
+    smooth.threshold = 20;
+    smooth.noiseMode = NoiseMode::Off;
+    Gate smoothGate(smooth);
+    smoothGate.Initialize(48000, 1);
+    float lastOutput = 0;
+    const auto continuousFrame = [&] {
+      std::fill_n(audio.channels()[0], audio.num_frames(), 4000.0f);
+      smoothGate.Process(&audio);
+      for (size_t i = 0; i < audio.num_frames(); ++i) {
+        check(std::abs(audio.channels()[0][i] - lastOutput) < 40,
+              "activity transitions must not introduce a click into a continuous signal");
+        lastOutput = audio.channels()[0][i];
+      }
+    };
+    for (int i = 0; i < 3; ++i) continuousFrame();
+    check(lastOutput == 4000, "opening ramp must reach the requested microphone level");
+    smooth.threshold = 100;
+    for (int i = 0; i < 23; ++i) continuousFrame();
+    check(lastOutput == 0 && !smooth.transmitting,
+          "activity fade and limiter tail must finish after the existing hangover");
+    smooth.activity = false;
+    smooth.ptt = true;
+    continuousFrame();
+    smooth.ptt = false;
+    std::fill_n(audio.channels()[0], audio.num_frames(), 4000.0f);
+    smoothGate.Process(&audio);
+    for (size_t i = 0; i < audio.num_frames(); ++i)
+      check(audio.channels()[0][i] == 0, "releasing PTT must flush voice immediately");
+    smooth.ptt = true;
+    std::fill_n(audio.channels()[0], audio.num_frames(), 0.0f);
+    smoothGate.Process(&audio);
+    for (size_t i = 0; i < audio.num_frames(); ++i)
+      check(audio.channels()[0][i] == 0, "reopening PTT must never replay its buffered tail");
     Controls enhanced;
     enhanced.muted = false;
     enhanced.activity = false;

@@ -14,6 +14,7 @@ const {
   desktopCapturer,
   Tray,
   nativeImage,
+  powerMonitor,
 } = require('electron');
 const { PRODUCTION_URL, appUrl, sameOrigin, externalUrl } = require('./security/policy.cjs');
 const { installPermissions } = require('./security/permissions.cjs');
@@ -21,6 +22,7 @@ const { installCapture } = require('./capture/capture.cjs');
 const { installUpdates } = require('./update/window.cjs');
 const { installAudio } = require('./audio/audio.cjs');
 const { installNativeVoice } = require('./voice/native-voice.cjs');
+const { installPushToTalk } = require('./input/push-to-talk.cjs');
 const { acknowledgeApplication } = require('./update/windows-application.cjs');
 
 app.setName('Cuescord');
@@ -66,12 +68,22 @@ function createWindow(appSession) {
     },
   });
   mainWindow = win;
-  installNativeVoice({
+  let pushToTalk;
+  const nativeVoice = installNativeVoice({
     app,
     ipcMain,
     window: win,
     trustedUrl,
     onActiveChanged: (active) => desktopPresence.setNativeVoiceActive(active),
+    getPushToTalk: () => pushToTalk?.snapshot(),
+  });
+  pushToTalk = installPushToTalk({
+    app,
+    ipcMain,
+    powerMonitor,
+    window: win,
+    trustedUrl,
+    onPressed: (pressed) => nativeVoice.setPushToTalk(pressed),
   });
   desktopPresence.attach(win);
   const recovery = installPageRecovery({ window: win, trustedUrl, recoveryUrl });
