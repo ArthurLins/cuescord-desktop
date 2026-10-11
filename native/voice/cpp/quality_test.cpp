@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "voice_health.hpp"
@@ -119,6 +120,20 @@ static void checkDynamics() {
 int main() {
   try {
 #ifdef _WIN32
+    const DWORD originalPriority = GetPriorityClass(GetCurrentProcess());
+    check(originalPriority != 0, "the original process priority must be readable");
+    {
+      ProcessAudioPriority priority;
+      check(priority.error == 0 && priority.currentClass() == HIGH_PRIORITY_CLASS,
+            "the dedicated voice process must use High priority");
+      DWORD workerPriority = 0;
+      std::thread worker([&] { workerPriority = GetPriorityClass(GetCurrentProcess()); });
+      worker.join();
+      check(workerPriority == HIGH_PRIORITY_CLASS,
+            "new codec and RTP workers must share the elevated process priority");
+    }
+    check(GetPriorityClass(GetCurrentProcess()) == originalPriority,
+          "stopping the voice engine must restore the previous process priority");
     DWORD task = 0;
     HANDLE existing = AvSetMmThreadCharacteristicsW(L"Audio", &task);
     if (existing) {

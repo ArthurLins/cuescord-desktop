@@ -81,6 +81,8 @@ export interface NativeVoiceStats {
   captureFrames: number;
   inputLevel: number;
   powerProtection: boolean;
+  processPriorityClass?: number;
+  processPriorityError?: number;
   engine: string;
   noiseSuppressionMode?: 'native' | 'rnnoise';
   noiseProcessorStatus?: NativeNoiseStatus;

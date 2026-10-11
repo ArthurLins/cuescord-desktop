@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.15
+
+- Aplica prioridade Alta automaticamente ao processo separado de voz no Windows x64, favorecendo filtros, codecs e transporte quando um jogo disputa CPU, inclusive com o cliente minimizado.
+- Preserva a prioridade multimídia Pro Audio na captura e reprodução, sem alterar bitrate, afinidade, registro ou configurações globais; restaura a classe anterior ao encerrar o motor.
+- Informa a classe de prioridade efetiva e eventuais erros do Windows nos stats nativos, sem impedir chamadas quando o sistema recusa a elevação.
+- Valida a prioridade real no Windows, o ciclo de vida dos workers e a restauração da classe anterior; mantém a compatibilidade dos demais sistemas.
+
 ## 0.4.14
 
 - Suaviza as mudanças de ganho e a abertura/fechamento por atividade de voz para reduzir estalos; o limitador passa a acompanhar picos por amostra com antecipação de 5 ms na captura e na reprodução.

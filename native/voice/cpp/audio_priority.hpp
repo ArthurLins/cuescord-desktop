@@ -7,6 +7,47 @@
 // clang-format on
 #endif
 
+// Only the dedicated voice helper owns this scope. Raise all its codec/RTP
+// workers before starting them; the Electron UI keeps its usual priority.
+// HIGH stays below OS realtime work and does not reserve CPU or change affinity.
+class ProcessAudioPriority {
+#ifdef _WIN32
+  DWORD previous = 0;
+  bool changed = false;
+#endif
+ public:
+  unsigned error = 0;
+  ProcessAudioPriority() {
+#ifdef _WIN32
+    previous = GetPriorityClass(GetCurrentProcess());
+    if (!previous) {
+      error = GetLastError();
+      return;
+    }
+    if (previous != HIGH_PRIORITY_CLASS) {
+      changed = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) != 0;
+      // A denied boost must not prevent a person from joining voice.
+      if (!changed) error = GetLastError();
+    }
+#endif
+  }
+  ~ProcessAudioPriority() {
+#ifdef _WIN32
+    if (changed && currentClass() == HIGH_PRIORITY_CLASS)
+      SetPriorityClass(GetCurrentProcess(), previous);
+#endif
+  }
+  unsigned currentClass() const {
+#ifdef _WIN32
+    return GetPriorityClass(GetCurrentProcess());
+#else
+    return 0;
+#endif
+  }
+  ProcessAudioPriority(const ProcessAudioPriority&) = delete;
+  ProcessAudioPriority& operator=(const ProcessAudioPriority&) = delete;
+};
+
 // The registration and its revocation belong to the audio thread, not Engine's
 // control thread. No global realtime priority or persistent OS setting changes.
 class AudioPriority {

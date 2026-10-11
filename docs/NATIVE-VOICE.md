@@ -23,7 +23,7 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/voice_dynamics.hpp`: rampas de ganho e limitador com antecipação de 5 ms.
 - `native/voice/cpp/voice_mixer.hpp`: volume e reforço das vozes recebidas.
 - `native/voice/cpp/voice_health.hpp`: medição e recuperação limitada da qualidade.
-- `native/voice/cpp/audio_priority.hpp`: registro MMCSS na thread de áudio.
+- `native/voice/cpp/audio_priority.hpp`: prioridade do processo de voz e registro MMCSS na thread de áudio.
 - `electron/voice/`: autorização, consulta de dispositivos e ciclo do processo.
 - `renderer/native-voice.ts`: contrato público, sessão e cancelamento.
 - `renderer/voice-transport-recovery.ts`: recuperação ICE compartilhada com a web.
@@ -198,7 +198,16 @@ antiga é serializada pelo renderer para preservar a mesma ordem de propriedade.
 
 Durante a sessão nativa, a ponte desabilita background throttling no WebContents,
 para manter sinalização autenticada e timers de recuperação quando minimizado.
-Ao encerrar, restaura a configuração anterior. Não altera a prioridade do sistema.
+Ao encerrar, restaura a configuração anterior.
+
+O helper de voz aplica `HIGH_PRIORITY_CLASS` antes de iniciar seus workers de
+controle, filtros, codecs e RTP. A prioridade Alta vale somente para esse processo,
+inclusive com a janela minimizada, e é restaurada ao destruir o motor. Não usa
+prioridade de processo Realtime, reserva de CPU, afinidade fixa ou configuração
+persistente do Windows. A interface Electron mantém sua classe de prioridade.
+Uma recusa do Windows não impede abrir a chamada; `processPriorityClass` nos
+stats informa a classe efetiva e `processPriorityError` registra a falha de
+aplicação. Captura e reprodução continuam usando o MMCSS descrito abaixo.
 
 Falha libera a sessão anterior e reconecta com voz nativa, preservando mute/deafen.
 Após três falhas seguidas, a recuperação usa voz web como último recurso. Uma
@@ -292,6 +301,8 @@ rampas de abertura/fechamento e descarte da cauda ao soltar PTT.
 picos de uma amostra, áudio aleatório, estéreo e mudanças de formato em 8–48 kHz,
 além de margem, mix/deafen e recuperação com
 silêncio, perda de rede, aceleração persistente e contadores reiniciados.
+Também verifica a aplicação real de prioridade Alta, a classe vista por um
+worker novo e a restauração da prioridade anterior no Windows.
 `VoiceAudioSessionTests` verifica categoria sem atenuação em entrada/saída e
 reaberturas, propriedades de processamento, propagação de erro e ausência de
 operações de dispositivo/volume. Também verifica a proteção do fluxo de reprodução,

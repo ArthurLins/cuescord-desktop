@@ -91,6 +91,8 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   bool fallbackApplied = false;
   bool com = false, powerProtection = false;
   bool sockets = false;
+  // Construct before runner; restore only after every audio worker has stopped.
+  ProcessAudioPriority processPriority;
   std::thread runner;
 
   void emit(Json value) {
@@ -369,6 +371,8 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
               {"inputLevel", controls.level.load()},
               {"engine", "libwebrtc-m140"},
               {"powerProtection", powerProtection},
+              {"processPriorityClass", processPriority.currentClass()},
+              {"processPriorityError", processPriority.error},
               {"roomAudioBitrate", roomBitrate},
               {"microphoneEncodingBitrate", encodingBitrate},
               {"microphoneAdaptivePtime",

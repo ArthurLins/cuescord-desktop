@@ -56,6 +56,15 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
   limitação do renderer em segundo plano para proteger o ritmo do áudio. Ao sair
   da chamada, recarregar a página ou encerrar o renderer, restaura a limitação.
   Isso pode aumentar o consumo de recursos enquanto uma chamada está ativa.
+- No Windows x64, o processo separado `cuescord-voice.exe` usa prioridade
+  **Alta** para favorecer processamento e transporte de voz quando um jogo
+  disputa CPU. Captura e reprodução mantêm a prioridade multimídia **Pro Audio**
+  (MMCSS), inclusive com a janela minimizada. A prioridade é aplicada a cada
+  sessão do helper e termina com ele, sem configuração manual ou privilégio de
+  administrador. Os diagnósticos informam a classe efetiva e eventuais erros do
+  Windows; uma falha ao elevar a prioridade não impede a chamada.
+  Essa política não reserva CPU, altera o bitrate nem elimina problemas de rede,
+  drivers ou sobrecarga extrema da máquina.
 - No Windows, o ícone da barra de tarefas mostra as mensagens não lidas (`99+`
   acima de 99). Durante uma chamada, os ícones da janela e da bandeja mostram um
   telefone com o microfone ativado ou desativado. Ao sair, volta o ícone normal.
