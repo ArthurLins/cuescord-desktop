@@ -1,4 +1,5 @@
-use serde::Deserialize;
+mod plan;
+use plan::{Plan, valid_relative};
 use sha2::{Digest, Sha512};
 use std::{
     collections::HashSet,
@@ -10,25 +11,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Entry {
-    path: String,
-    size: u64,
-    sha512: String,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Plan {
-    schema: u8,
-    install: PathBuf,
-    stage: PathBuf,
-    backup: PathBuf,
-    version: String,
-    files: Vec<Entry>,
-    acknowledgement: PathBuf,
-    result: PathBuf,
-}
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn hash_file(path: &Path) -> Result<String> {
@@ -67,23 +49,6 @@ fn ordinary_ancestors(path: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn valid_relative(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 240
-        && value.split('/').all(|part| {
-            let base = part.split('.').next().unwrap_or("").to_ascii_lowercase();
-            !part.is_empty()
-                && !part.ends_with(['.', ' '])
-                && part
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"_.@+() -".contains(&b))
-                && !["con", "prn", "aux", "nul"].contains(&base.as_str())
-                && !(base.len() == 4
-                    && (base.starts_with("com") || base.starts_with("lpt"))
-                    && base.as_bytes()[3].is_ascii_digit())
-        })
 }
 
 fn tree_files(root: &Path, relative: &Path, actual: &mut HashSet<String>) -> Result<()> {
@@ -149,35 +114,8 @@ fn read_plan(file: &Path, digest: &str) -> Result<Plan> {
     let directory = file.parent().ok_or("invalid plan path")?;
     ordinary_ancestors(directory)?;
     ordinary_ancestors(&plan.install)?;
-    if plan.schema != 1
-        || plan.files.is_empty()
-        || plan.files.len() > 8192
-        || !plan.install.is_absolute()
-        || !plan.stage.is_absolute()
-        || !plan.backup.is_absolute()
-        || plan.install.parent().is_none()
-        || plan.stage.parent() != plan.install.parent()
-        || plan.backup.parent() != plan.install.parent()
-        || !plan
-            .stage
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(|s| s.starts_with(".cuescord-update-"))
-        || !plan
-            .backup
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(|s| s.starts_with(".cuescord-backup-"))
-        || plan.acknowledgement != directory.join("started.json")
-        || plan.result != directory.join("result.json")
-        || plan.install == plan.stage
-        || plan.install == plan.backup
-        || plan.stage == plan.backup
-        || plan.backup.exists()
-        || directory.starts_with(&plan.install)
-        || directory.starts_with(&plan.stage)
-        || plan.acknowledgement.exists()
-    {
+    plan.validate_paths(directory)?;
+    if plan.backup.exists() || plan.acknowledgement.exists() {
         return Err("invalid transaction paths".into());
     }
     verify_tree(&plan)?;
@@ -353,19 +291,5 @@ fn main() {
     {
         eprintln!("Windows only");
         std::process::exit(1);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn rejects_windows_path_aliases() {
-        for path in [
-            "../evil", "/evil", "a\\b", "a:stream", "NUL.txt", "COM1", "a./file", "a /file", "a//b",
-        ] {
-            assert!(!valid_relative(path), "{path}");
-        }
-        assert!(valid_relative("resources/app.asar.unpacked/module.node"));
     }
 }

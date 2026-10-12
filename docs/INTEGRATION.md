@@ -3,12 +3,13 @@
 Este diretório documenta apenas o contrato do cliente. O código da plataforma,
 autenticação e sinalização/WebRTC permanecem no projeto consumidor.
 
-O preload publica `window.__CUESCORD_DESKTOP__` com version, platform, engine
-screenAudio, screenShare e presence. O adaptador `renderer/screen-audio.ts` não importa Electron,
-React ou módulos de servidor; pode ser incluído no bundle da página.
+O web é a aplicação base e é dono de seus adaptadores, sessão, recuperação e
+worklets. Ele não importa arquivos deste repositório. O preload implementa as
+capacidades opcionais em `window.__CUESCORD_DESKTOP__`: version, platform, engine,
+screenAudio, screenShare, presence, nativeVoice e pushToTalk.
 
-1. Importe desktopEnvironment e attachDesktopScreenAudio desse arquivo.
-2. Sirva renderer/desktop-screen-audio-worklet.js em
+1. A aplicação base consulta essas capacidades por seus próprios contratos.
+2. Sirva o worklet de áudio que pertence ao web em
    /audio/desktop-screen-audio-worklet.js na mesma origem da página.
 3. A partir de uma ação do usuário, obtenha um MediaStream via getDisplayMedia,
    solicitando áudio quando a integração de áudio for desejada.
@@ -25,7 +26,8 @@ O worklet não é conectado aos alto-falantes locais.
 
 ## Contador e estado de chamada
 
-O adaptador `renderer/desktop-presence.ts` exporta `updateDesktopPresence`.
+O adaptador de presença da aplicação web chama a capacidade opcional
+`presence.update` fornecida pelo host.
 A página deve chamá-lo após o carregamento e sempre que a contagem ou a chamada
 mudar, inclusive com a janela oculta:
 
@@ -59,10 +61,13 @@ pnpm --dir apps/desktop install --frozen-lockfile
 pnpm --dir apps/desktop desktop:dev
 ```
 
-O consumidor pode importar renderer/screen-audio.ts diretamente e copiar o
-worklet no seu preparo de assets. Docker/CI devem incluir renderer/ no contexto
-e fazer checkout dos submódulos antes do build. Nunca use automaticamente main
-durante o build: o gitlink registra o commit revisado.
+O build web/CI/Docker usa somente seus próprios fontes e não exige checkout do
+submódulo. O desktop abre a aplicação base remota e fornece a ponte, sem publicar
+implementações de navegador para serem importadas pelo web.
+
+Para executar as jornadas da base neste host, use `pnpm test:web` com os caminhos
+dos specs. O runner fornece o executável e entrypoints Electron por ambiente. Em
+um clone independente, defina `CUESCORD_WEB_ROOT` para a raiz do projeto web.
 
 Para atualizar conscientemente:
 

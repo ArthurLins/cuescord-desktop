@@ -4,9 +4,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { applicationFixture, policy, bytes } from './update-fixture.mjs';
+import { applicationFixture, policy, bytes, createUpdater } from './update-fixture.mjs';
 const require = createRequire(import.meta.url);
-const { DesktopUpdater, markDownloadedFile } = require('../electron/update/updater.cjs');
+const { markDownloadedFile } = require('../electron/update/package-store.cjs');
 const {
   prepareApplication,
   discardApplication,
@@ -18,7 +18,7 @@ async function setup(t, options = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'cuescord-application-test-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
-  const updater = new DesktopUpdater({
+  const updater = createUpdater({
     version: '0.4.9',
     platform: 'win32',
     arch: 'x64',
@@ -83,7 +83,7 @@ test('application tampering never falls back to a legacy installer', async (t) =
     await writeFile(file, 'changed');
     assert.equal((await updater.install()).status, 'error');
     assert.ok(!calls.includes('apply'));
-    assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+    assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
   }
 });
 
@@ -106,7 +106,7 @@ test('application download cancellation removes all staged files', async (t) => 
     updater.cancel();
   };
   assert.equal((await updater.download()).status, 'idle');
-  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
 });
 
 test(
@@ -125,7 +125,7 @@ test(
     const prepared = await prepareApplication({
       ready: updater.ready,
       executable: path.join(install, 'Cuescord.exe'),
-      cacheRoot: updater.cacheRoot,
+      cacheRoot: updater.storage.cacheRoot,
     });
     t.after(() => discardApplication(prepared));
     for (const file of [

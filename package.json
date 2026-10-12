@@ -33,6 +33,7 @@
     "desktop:check": "node scripts/check.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:ui": "playwright test",
+    "test:web": "node scripts/test-web.mjs",
     "format": "prettier --write \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\"",
     "format:check": "prettier --check \"{electron,renderer,customizations,scripts,tests}/**/*.{ts,js,cjs,mjs,css}\" \"*.{ts,cjs,mjs,json}\"",
     "native:build": "node scripts/build-native-voice.mjs"

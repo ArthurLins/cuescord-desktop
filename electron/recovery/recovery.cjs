@@ -124,4 +124,4 @@ function installPageRecovery({
     },
   };
 }
-module.exports = { installPageRecovery, probeServer };
+module.exports = { installPageRecovery };

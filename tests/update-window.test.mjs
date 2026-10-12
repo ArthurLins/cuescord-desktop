@@ -84,20 +84,30 @@ function setup() {
     },
     shell: { openPath: async () => '' },
   };
+  const dependencies = {
+    'node:path': path,
+    'node:url': { pathToFileURL },
+    electron,
+    './updater.cjs': { DesktopUpdater: Updater },
+    './package-store.cjs': {
+      UpdatePackageStore: class {
+        constructor(options) {
+          this.options = options;
+        }
+      },
+    },
+    './network.cjs': { readJson: async () => {}, downloadVerified: async () => {} },
+    './trusted-keys.json': { keys: [] },
+    './windows-application.cjs': {},
+  };
   vm.runInNewContext(readFileSync(path.join(directory, 'window.cjs'), 'utf8'), {
     module,
     __dirname: directory,
     process,
-    require: (name) =>
-      name === 'node:path'
-        ? path
-        : name === 'node:url'
-          ? { pathToFileURL }
-          : name === 'electron'
-            ? electron
-            : name === './updater.cjs'
-              ? { DesktopUpdater: Updater }
-              : { keys: [] },
+    require: (name) => {
+      assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency: ${name}`);
+      return dependencies[name];
+    },
   });
   const control = module.exports.installUpdates({
     app,

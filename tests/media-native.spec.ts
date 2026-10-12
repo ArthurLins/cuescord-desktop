@@ -1,7 +1,7 @@
 import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { terminateWindowsProcessTree } from './fixtures/electron-process';
 
 test('desktop captures microphone without camera and refuses subframes and other windows', async ({}, testInfo) => {
   test.setTimeout(60000);
@@ -79,11 +79,7 @@ test('desktop captures microphone without camera and refuses subframes and other
   } finally {
     const child = client.process();
     if (child.exitCode === null) {
-      if (process.platform === 'win32')
-        spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-          windowsHide: true,
-          stdio: 'ignore',
-        });
+      if (process.platform === 'win32') terminateWindowsProcessTree(child.pid);
       else child.kill('SIGKILL');
     }
     await client.close().catch(() => {});

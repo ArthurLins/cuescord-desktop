@@ -1,7 +1,7 @@
 import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { terminateWindowsProcessTree } from './fixtures/electron-process';
 test.use({ trace: 'retain-on-failure' });
 
 test('real desktop loads local recovery, retains controls and returns to its route', async ({}, testInfo) => {
@@ -81,11 +81,7 @@ test('real desktop loads local recovery, retains controls and returns to its rou
     // The Windows Electron launcher can keep its shell alive after window close.
     const process = client.process();
     if (process.exitCode === null) {
-      if (globalThis.process.platform === 'win32')
-        spawnSync('taskkill.exe', ['/PID', String(process.pid), '/T', '/F'], {
-          windowsHide: true,
-          stdio: 'ignore',
-        });
+      if (globalThis.process.platform === 'win32') terminateWindowsProcessTree(process.pid);
       else process.kill('SIGKILL');
     }
     await client.close().catch(() => {});

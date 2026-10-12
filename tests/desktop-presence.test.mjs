@@ -4,10 +4,8 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
-const {
-  installDesktopPresence,
-  validPresence,
-} = require('../electron/window/desktop-presence.cjs');
+const { installDesktopPresence } = require('../electron/window/desktop-presence.cjs');
+const { validPresence } = require('../electron/window/presence-policy.cjs');
 const { badgePng, callPng } = require('../electron/window/status-icons.cjs');
 
 function setup(platform = 'win32') {

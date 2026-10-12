@@ -3,8 +3,47 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Page } from '@playwright/test';
 
+interface QualityProfile {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  frameRate: number;
+  maxBitrate: number;
+}
+interface CapturePickerModel {
+  id: string;
+  platform: string;
+  macAudio?: boolean;
+  portal: boolean;
+  qualityProfiles: QualityProfile[];
+  defaultQuality: string;
+}
+interface CaptureSelectionOptions {
+  kind: 'window' | 'screen';
+  quality: string;
+  audio: boolean;
+  audioApp?: string;
+}
+interface CaptureSubmission extends CaptureSelectionOptions {
+  source: string;
+}
+interface CaptureHandlers {
+  'cuescord:capture:open': (event: object, model: CapturePickerModel) => void;
+  'cuescord:capture:close': (event: object, id: string) => void;
+}
+interface CaptureTestWindow extends Window {
+  captureSubmission?: () => CaptureSubmission | undefined;
+}
+
 const require = createRequire(import.meta.url);
-const { screenQualities, defaultScreenQuality } = require('../electron/capture/quality.cjs');
+const {
+  screenQualities,
+  defaultScreenQuality,
+}: {
+  screenQualities: QualityProfile[];
+  defaultScreenQuality: string;
+} = require('../electron/capture/quality.cjs');
 const source = readFileSync(
   new URL('../customizations/capture/capture-modal.js', import.meta.url),
   'utf8',
@@ -24,11 +63,21 @@ async function openPicker(page: Page, model: { platform: string; macAudio?: bool
       Element.prototype.attachShadow = function (options) {
         return attach.call(this, { ...options, mode: 'open' });
       };
-      const handlers = new Map();
-      let submitted;
+      const handlers: Partial<CaptureHandlers> = {};
+      let submitted: CaptureSubmission | undefined;
       const ipc = {
-        on: (name, callback) => handlers.set(name, callback),
-        invoke: async (name, id, value, options) => {
+        on: <Channel extends keyof CaptureHandlers>(
+          name: Channel,
+          callback: CaptureHandlers[Channel],
+        ) => {
+          handlers[name] = callback;
+        },
+        invoke: async (
+          name: string,
+          id: string,
+          value?: string,
+          options?: CaptureSelectionOptions,
+        ) => {
           if (name === 'cuescord:capture:sources')
             return {
               audioApps: [],
@@ -42,20 +91,34 @@ async function openPicker(page: Page, model: { platform: string; macAudio?: bool
               ],
             };
           if (name === 'cuescord:capture:select') {
+            if (!value || !options)
+              throw new Error('Capture fixture requires a source and selection');
             submitted = { source: value, ...options };
-            handlers.get('cuescord:capture:close')({}, id);
+            const close = handlers['cuescord:capture:close'];
+            if (!close) throw new Error('Capture fixture did not register its close handler');
+            close({}, id);
           }
         },
       };
       Object.assign(window, { captureSubmission: () => submitted });
+      // eslint-disable-next-line sonarjs/code-eval -- Executes only the checked-in local capture modal source in the isolated test page; no page input or remote script enters this string.
       new Function(`return (${source})`)()(ipc, css);
-      handlers.get('cuescord:capture:open')(
-        {},
-        { id: 'test', ...model, portal: false, qualityProfiles: profiles, defaultQuality },
-      );
+      const open = handlers['cuescord:capture:open'];
+      if (!open) throw new Error('Capture fixture did not register its open handler');
+      open({}, { id: 'test', ...model, portal: false, qualityProfiles: profiles, defaultQuality });
     },
     { source, css, profiles: screenQualities, defaultQuality: defaultScreenQuality, model },
   );
+}
+
+function readSubmission(page: Page) {
+  return page.evaluate(() => {
+    const read = (window as CaptureTestWindow).captureSubmission;
+    if (!read) throw new Error('Capture fixture has no submission reader');
+    const submitted = read();
+    if (!submitted) throw new Error('Capture fixture has not submitted a selection');
+    return submitted;
+  });
 }
 
 test('desktop capture picker keeps the chosen quality across source tabs and submits it', async ({
@@ -70,11 +133,7 @@ test('desktop capture picker keeps the chosen quality across source tabs and sub
   await expect(quality).toHaveValue('1440p60');
   await page.screenshot({ path: testInfo.outputPath('screen-quality-picker.png') });
   await page.getByRole('button', { name: 'Compartilhar', exact: true }).click();
-  const submitted = await page.evaluate(() =>
-    (
-      window as Window & { captureSubmission: () => { source: string; quality: string } }
-    ).captureSubmission(),
-  );
+  const submitted = await readSubmission(page);
   expect(submitted.source).toBe('screen:1');
   expect(submitted.quality).toBe('1440p60');
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -96,7 +155,7 @@ test('macOS picker offers opt-in application and system audio and resets consent
   await applicationAudio.check();
   await page.getByRole('button', { name: 'Editor de texto', exact: true }).click();
   await page.getByRole('button', { name: 'Compartilhar', exact: true }).click();
-  expect(await page.evaluate(() => (window as any).captureSubmission())).toMatchObject({
+  expect(await readSubmission(page)).toMatchObject({
     source: 'window:1',
     kind: 'window',
     audio: true,
@@ -112,7 +171,7 @@ test('older macOS versions keep video sharing without advertising unavailable au
   await expect(page.getByRole('checkbox')).not.toBeVisible();
   await page.getByRole('button', { name: 'Tela 1', exact: true }).click();
   await page.getByRole('button', { name: 'Compartilhar', exact: true }).click();
-  expect(await page.evaluate(() => (window as any).captureSubmission())).toMatchObject({
+  expect(await readSubmission(page)).toMatchObject({
     audio: false,
   });
 });

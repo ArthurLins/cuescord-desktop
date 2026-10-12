@@ -3,6 +3,10 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { NativeVoiceBridge } from '../renderer/native-voice';
 
+interface NativeVoiceTestWindow extends Window {
+  __CUESCORD_DESKTOP__?: { nativeVoice?: NativeVoiceBridge };
+}
+
 test('real sandbox selects native voice automatically and revokes a helper on navigation', async ({}, testInfo) => {
   test.setTimeout(30000);
   const server = createServer((request, response) => {
@@ -24,9 +28,8 @@ test('real sandbox selects native voice automatically and revokes a helper on na
     const page = await client.firstWindow();
     const read = () =>
       page.evaluate(async () => {
-        const bridge = (
-          window as Window & { __CUESCORD_DESKTOP__: { nativeVoice: NativeVoiceBridge } }
-        ).__CUESCORD_DESKTOP__.nativeVoice;
+        const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+        if (!bridge) throw new Error('Native voice bridge is missing from the trusted frame');
         return bridge.status();
       });
     await expect
@@ -41,7 +44,8 @@ test('real sandbox selects native voice automatically and revokes a helper on na
     if (!(await read()).available) {
       await expect(
         page.evaluate(async () => {
-          const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
+          const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+          if (!bridge) throw new Error('Native voice bridge is missing from the trusted frame');
           try {
             await bridge.open();
             return false;
@@ -53,7 +57,8 @@ test('real sandbox selects native voice automatically and revokes a helper on na
       return;
     }
     const id = await page.evaluate(async () => {
-      const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
+      const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+      if (!bridge) throw new Error('Native voice bridge is missing from the trusted frame');
       return (await bridge.open()).sessionId;
     });
     expect((await read()).active).toBe(true);
@@ -65,7 +70,8 @@ test('real sandbox selects native voice automatically and revokes a helper on na
     await client.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
     // Enumeration initializes WASAPI but never starts recording or playback.
     const devices = await page.evaluate(async (sessionId) => {
-      const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
+      const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+      if (!bridge) throw new Error('Native voice bridge is missing from the trusted frame');
       const rows = await bridge.request<Array<{ kind: string }>>(sessionId, 'devices');
       return rows.every((row) => row.kind === 'audioinput' || row.kind === 'audiooutput');
     }, id);
@@ -79,7 +85,8 @@ test('real sandbox selects native voice automatically and revokes a helper on na
     ).toBe(true);
     expect((await read()).enabled).toBe(true);
     const staleDenied = await page.evaluate(async (sessionId) => {
-      const bridge = (window as any).__CUESCORD_DESKTOP__.nativeVoice as NativeVoiceBridge;
+      const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+      if (!bridge) throw new Error('Native voice bridge is missing from the trusted frame');
       try {
         await bridge.request(sessionId, 'stats');
         return false;

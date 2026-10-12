@@ -2,7 +2,7 @@ import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { terminateWindowsProcessTree } from './fixtures/electron-process';
 
 for (const state of ['connected', 'recovering', 'probing']) {
   test(`real desktop quits cleanly while ${state}`, async ({}, testInfo) => {
@@ -49,11 +49,7 @@ for (const state of ['connected', 'recovering', 'probing']) {
       expect(errors).toBe('');
     } finally {
       if (child.exitCode === null) {
-        if (process.platform === 'win32')
-          spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-            windowsHide: true,
-            stdio: 'ignore',
-          });
+        if (process.platform === 'win32') terminateWindowsProcessTree(child.pid);
         else child.kill('SIGKILL');
       }
       await client.close().catch(() => {});

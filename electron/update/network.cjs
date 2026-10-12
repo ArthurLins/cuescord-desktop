@@ -108,4 +108,4 @@ async function downloadVerified(url, artifact, destination, signal, progress, re
   }
 }
 
-module.exports = { responseFor, readJson, downloadVerified };
+module.exports = { readJson, downloadVerified };

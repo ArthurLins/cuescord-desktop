@@ -1,4 +1,4 @@
-// Stable DOM codes shared by settings, focused input and Windows input.
+// Maps the base web input contract's DOM codes to Windows keys.
 const scanCodes = {
   Backquote: 0x29,
   Minus: 0x0c,
@@ -71,25 +71,9 @@ function validPushToTalkShortcut(code) {
       Object.hasOwn(mouseKeys, code))
   );
 }
-function mouseShortcut(button) {
-  return Number.isInteger(button) && button >= 0 && button <= 4 ? 'Mouse' + button : undefined;
-}
-function formatPushToTalkShortcut(code, locale = 'pt-BR') {
-  const labels =
-    locale === 'pt-BR'
-      ? ['Mouse esquerdo', 'Mouse do meio', 'Mouse direito', 'Mouse lateral 1', 'Mouse lateral 2']
-      : ['Left mouse', 'Middle mouse', 'Right mouse', 'Mouse side 1', 'Mouse side 2'];
-  if (Object.hasOwn(mouseKeys, code)) return labels[Number(code.slice(5))];
-  return code
-    .replace(/^Key|^Digit/, '')
-    .replace(/Left$/, ' (L)')
-    .replace(/Right$/, ' (R)');
-}
 module.exports = {
   scanCodes,
   virtualKeys,
   mouseKeys,
   validPushToTalkShortcut,
-  mouseShortcut,
-  formatPushToTalkShortcut,
 };

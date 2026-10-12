@@ -4,11 +4,11 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 const require = createRequire(import.meta.url);
 const {
-  supportsMacAudio,
   captureArguments,
   createPacketParser,
   startMacAudio,
 } = require('../electron/audio/audio-mac.cjs');
+const { supportsMacAudio } = require('../electron/audio/capabilities.cjs');
 
 function packet(type, data = Buffer.alloc(0)) {
   const header = Buffer.alloc(5);

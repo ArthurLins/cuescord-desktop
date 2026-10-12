@@ -25,8 +25,9 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/voice_health.hpp`: medição e recuperação limitada da qualidade.
 - `native/voice/cpp/audio_priority.hpp`: prioridade do processo de voz e registro MMCSS na thread de áudio.
 - `electron/voice/`: autorização, consulta de dispositivos e ciclo do processo.
-- `renderer/native-voice.ts`: contrato público, sessão e cancelamento.
-- `renderer/voice-transport-recovery.ts`: recuperação ICE compartilhada com a web.
+- `renderer/native-voice.ts`: contrato IPC do produtor, usado pelos testes do host.
+- A aplicação web base é dona da sessão, cancelamento e recuperação ICE. Ela
+  define suas capacidades opcionais e não importa a implementação do desktop.
 
 O contrato público mantém nomes/unidades da web: mute/deafen/PTT, modo de entrada,
 atividade automática/manual, limiar 0–100 e volumes 0–200. IDs WASAPI e IDs web

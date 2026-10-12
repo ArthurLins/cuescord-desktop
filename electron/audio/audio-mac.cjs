@@ -1,10 +1,6 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 
-function supportsMacAudio(platform = process.platform, release = require('node:os').release()) {
-  return platform === 'darwin' && /^\d+\./.test(release) && Number(release.split('.')[0]) >= 22;
-}
-
 function captureArguments(config) {
   if (
     !['window', 'screen'].includes(config.kind) ||
@@ -111,4 +107,4 @@ function startMacAudio(config, sendAudio, onError, launch = spawn) {
   return { ready, stop };
 }
 
-module.exports = { supportsMacAudio, captureArguments, createPacketParser, startMacAudio };
+module.exports = { captureArguments, createPacketParser, startMacAudio };

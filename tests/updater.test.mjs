@@ -4,16 +4,16 @@ import { mkdtemp, readFile, readdir, rm, writeFile, symlink } from 'node:fs/prom
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fixture, zipFixture, bytes } from './update-fixture.mjs';
+import { fixture, zipFixture, bytes, createUpdater } from './update-fixture.mjs';
 const require = createRequire(import.meta.url);
-const { DesktopUpdater, markDownloadedFile } = require('../electron/update/updater.cjs');
+const { markDownloadedFile } = require('../electron/update/package-store.cjs');
 
 async function setup(t, overrides = {}, data = fixture()) {
   const directory = await mkdtemp(path.join(tmpdir(), 'cuescord-updater-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const calls = [],
     state = [];
-  const updater = new DesktopUpdater({
+  const updater = createUpdater({
     version: '0.4.0',
     platform: 'win32',
     arch: 'x64',
@@ -112,7 +112,7 @@ test('persisted signed watermark blocks older releases after restart', async (t)
   const replay = structuredClone(data.manifest);
   replay.version = '0.5.0';
   for (const artifact of replay.artifacts) artifact.file = artifact.file.replace('0.6.0', '0.5.0');
-  const restarted = new DesktopUpdater({
+  const restarted = createUpdater({
     ...updater,
     readJson: async (_url, kind) =>
       kind === 'api'
@@ -121,7 +121,7 @@ test('persisted signed watermark blocks older releases after restart', async (t)
   });
   assert.equal((await restarted.check()).status, 'error');
   assert.match(restarted.getState().message, /anterior/);
-  await writeFile(path.join(updater.cacheRoot, 'verified-release.json'), '{}');
+  await writeFile(path.join(updater.storage.cacheRoot, 'verified-release.json'), '{}');
   assert.equal((await updater.check()).status, 'error');
 });
 
@@ -132,7 +132,7 @@ test('modified disk installer is rejected, cleaned and can be downloaded again',
   await writeFile(updater.ready.file, Buffer.alloc(bytes.length));
   assert.equal((await updater.install()).status, 'error');
   assert.equal(calls.includes('open'), false);
-  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
   assert.equal((await updater.check()).status, 'available');
   assert.equal((await updater.download()).status, 'ready');
 });
@@ -186,13 +186,17 @@ test('cancelled downloads remove bytes and allow a new check', async (t) => {
     signal.throwIfAborted();
   };
   assert.equal((await updater.download()).status, 'idle');
-  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
   assert.equal((await updater.check()).status, 'available');
 });
 
 test('symlinked cache directories are rejected', async (t) => {
   const { updater, directory } = await setup(t);
-  await symlink(directory, updater.cacheRoot, process.platform === 'win32' ? 'junction' : 'dir');
+  await symlink(
+    directory,
+    updater.storage.cacheRoot,
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
   assert.equal((await updater.check()).status, 'error');
 });
 
@@ -247,7 +251,7 @@ test('ZIP tampering is rejected with no direct-installer fallback or leftover fi
   await updater.check();
   assert.equal((await updater.download()).status, 'error');
   assert.deepEqual(calls, ['download']);
-  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
 });
 
 test('ZIP or extracted installer modified after downloading is rejected before opening', async (t) => {
@@ -258,7 +262,7 @@ test('ZIP or extracted installer modified after downloading is rejected before o
     await writeFile(updater.ready[field], 'tampered');
     assert.equal((await updater.install()).status, 'error');
     assert.equal(calls.includes('open'), false);
-    assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+    assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
   }
 });
 
@@ -271,7 +275,7 @@ test('ZIP download cancellation removes the archive and allows retry', async (t)
   };
   await updater.check();
   assert.equal((await updater.download()).status, 'idle');
-  assert.deepEqual(await readdir(updater.cacheRoot), ['verified-release.json']);
+  assert.deepEqual(await readdir(updater.storage.cacheRoot), ['verified-release.json']);
   updater.downloadVerified = download;
   assert.equal((await updater.download()).status, 'ready');
 });

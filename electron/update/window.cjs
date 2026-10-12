@@ -2,6 +2,8 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { BrowserWindow, dialog, shell } = require('electron');
 const { DesktopUpdater } = require('./updater.cjs');
+const { UpdatePackageStore } = require('./package-store.cjs');
+const { readJson, downloadVerified } = require('./network.cjs');
 const { keys } = require('./trusted-keys.json');
 const {
   prepareApplication,
@@ -31,7 +33,12 @@ function installUpdates({ app, ipcMain, getWindow }) {
     version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
-    cacheRoot: path.join(app.getPath('userData'), 'updates'),
+    storage: new UpdatePackageStore({
+      cacheRoot: path.join(app.getPath('userData'), 'updates'),
+      platform: process.platform,
+    }),
+    readJson,
+    downloadVerified,
     keys,
     packaged: app.isPackaged,
     confirmInstall: async (version, platform, applicationUpdate) => {

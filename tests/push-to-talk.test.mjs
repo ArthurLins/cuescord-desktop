@@ -2,55 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
-import { attachPushToTalkInput } from '../renderer/push-to-talk.ts';
 const require = createRequire(import.meta.url);
 const { installPushToTalk } = require('../electron/input/push-to-talk.cjs');
 const { createWindowsInput } = require('../electron/input/windows-input.cjs');
-const { validPushToTalkShortcut, mouseShortcut } = require('../renderer/push-to-talk-binding.cjs');
-
-test('a late configuration reply or older button event cannot overwrite newer input', async () => {
-  const target = Object.assign(new EventTarget(), {
-    crypto: { randomUUID },
-    document: { documentElement: { hasAttribute: () => false } },
-  });
-  let listener, pending, configuration;
-  const changes = [],
-    releases = [];
-  const bridge = {
-    subscribe: (fn) => {
-      listener = fn;
-      return () => {
-        listener = undefined;
-      };
-    },
-    configure: (value) => {
-      configuration = value;
-      return new Promise((resolve) => {
-        pending = resolve;
-      });
-    },
-    release: async (id) => {
-      releases.push(id);
-    },
-  };
-  const stop = attachPushToTalkInput({
-    target,
-    shortcut: 'KeyV',
-    bridge,
-    onPressed: (value) => changes.push(value),
-  });
-  const id = configuration.id;
-  listener({ id, global: true, available: true, pressed: true, sequence: 2 });
-  pending({ id, global: true, available: true, pressed: false, sequence: 1 });
-  await Promise.resolve();
-  assert.deepEqual(changes, [false, true]);
-  listener({ id, global: true, available: true, pressed: false, sequence: 3 });
-  listener({ id, global: true, available: true, pressed: true, sequence: 2 });
-  assert.deepEqual(changes, [false, true, false]);
-  stop();
-  assert.deepEqual(releases, [id]);
-});
+const { validPushToTalkShortcut } = require('../renderer/push-to-talk-binding.cjs');
 
 function fixture(options = {}) {
   const handlers = new Map(),
@@ -226,8 +181,8 @@ test('trusted top frame only; invalid keys rejected; unsupported platforms use f
     assert.equal(other.timers.size, 0);
     other.destroy();
   }
-  for (let i = 0; i <= 4; i++) assert.equal(validPushToTalkShortcut(mouseShortcut(i)), true);
-  assert.equal(mouseShortcut(5), undefined);
+  for (let i = 0; i <= 4; i++) assert.equal(validPushToTalkShortcut('Mouse' + i), true);
+  assert.equal(validPushToTalkShortcut('Mouse5'), false);
   assert.equal(validPushToTalkShortcut('__proto__'), false);
 });
 test('Windows adapter honors mouse swapping, physical keyboard layout and current high bit', () => {

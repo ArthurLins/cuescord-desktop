@@ -2,6 +2,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { utilityProcess } = require('electron');
 const { sameOrigin } = require('../security/policy.cjs');
+const { ScreenAudioGrant, AUDIO_GRANT_LIFETIME_MS } = require('./grant.cjs');
 
 function installAudio({ ipcMain, getWindow, trustedUrl }) {
   let grant;
@@ -53,7 +54,12 @@ function installAudio({ ipcMain, getWindow, trustedUrl }) {
     const contents = owner.webContents;
     const frame = contents.mainFrame;
     const id = randomUUID();
-    grant = { id, config: { ...config, ownPid: process.pid }, frame, claimed: false };
+    grant = new ScreenAudioGrant({
+      id,
+      owner: frame,
+      config: { ...config, ownPid: process.pid },
+      expiresAt: Date.now() + AUDIO_GRANT_LIFETIME_MS,
+    });
     const navigation = (_event, _url, inPlace, main) => {
       if (main && !inPlace) revoke();
     };
@@ -65,13 +71,11 @@ function installAudio({ ipcMain, getWindow, trustedUrl }) {
       contents.removeListener('render-process-gone', revoke);
       contents.removeListener('destroyed', revoke);
     };
-    timeout = setTimeout(revoke, 30_000);
+    timeout = setTimeout(revoke, AUDIO_GRANT_LIFETIME_MS);
   }
   ipcMain.handle('cuescord:audio:start', async (event) => {
-    if (!trusted(event) || !grant || grant.frame !== event.senderFrame || grant.claimed)
-      return null;
+    if (!trusted(event) || !grant?.claim(event.senderFrame, Date.now())) return null;
     const current = grant;
-    current.claimed = true;
     if (!current.config.enabled) {
       revoke();
       return null;

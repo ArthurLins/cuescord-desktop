@@ -2,12 +2,15 @@ import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { PushToTalkBridge } from '../renderer/push-to-talk';
-type PttWindow = Window & {
-  __CUESCORD_DESKTOP__: {
-    pushToTalk: PushToTalkBridge;
-    presence: { update(value: object): Promise<void> };
+interface PttWindow extends Window {
+  __CUESCORD_DESKTOP__?: {
+    pushToTalk?: PushToTalkBridge;
+    presence?: { update(value: object): Promise<void> };
   };
-  presses: boolean[];
+  presses?: boolean[];
+}
+type PttFixtureGlobal = typeof globalThis & {
+  pttFixture?: { read(code: string): boolean; held: Record<string, boolean> };
 };
 
 test('Windows sandbox delivers global mouse and keyboard transitions while minimized and hidden', async ({}, info) => {
@@ -38,7 +41,11 @@ test('Windows sandbox delivers global mouse and keyboard transitions while minim
       )
       .toBe(true);
     const state = () =>
-      page.evaluate(() => (window as PttWindow).__CUESCORD_DESKTOP__.pushToTalk.status());
+      page.evaluate(() => {
+        const bridge = (window as PttWindow).__CUESCORD_DESKTOP__?.pushToTalk;
+        if (!bridge) throw new Error('Push-to-talk bridge is missing from the trusted frame');
+        return bridge.status();
+      });
     expect((await state()).available).toBe(true);
     expect(await page.frames()[1].evaluate(() => '__CUESCORD_DESKTOP__' in window)).toBe(false);
     expect(
@@ -46,22 +53,28 @@ test('Windows sandbox delivers global mouse and keyboard transitions while minim
     ).toBe('undefined');
     // Exercise Koffi inside Electron as well as plain Node, without synthesized OS input.
     expect(
-      await client.evaluate(
-        () =>
-          typeof (
-            globalThis as unknown as { pttFixture: { read(code: string): boolean } }
-          ).pttFixture.read('KeyV'),
-      ),
+      await client.evaluate(() => {
+        const fixture = (globalThis as PttFixtureGlobal).pttFixture;
+        if (!fixture) throw new Error('Windows input fixture is unavailable');
+        return typeof fixture.read('KeyV');
+      }),
     ).toBe('boolean');
     await page.evaluate(async () => {
-      const desktop = (window as PttWindow).__CUESCORD_DESKTOP__;
-      (window as PttWindow).presses = [];
-      desktop.pushToTalk.subscribe((value) => (window as PttWindow).presses.push(value.pressed));
-      await desktop.presence.update({ unreadCount: 0, inCall: true, microphoneMuted: false });
+      const fixtureWindow = window as PttWindow;
+      const desktop = fixtureWindow.__CUESCORD_DESKTOP__;
+      const input = desktop?.pushToTalk;
+      const presence = desktop?.presence;
+      if (!input || !presence) throw new Error('Desktop input/presence bridges are unavailable');
+      const presses: boolean[] = [];
+      fixtureWindow.presses = presses;
+      input.subscribe((value) => presses.push(value.pressed));
+      await presence.update({ unreadCount: 0, inCall: true, microphoneMuted: false });
     });
     for (const shortcut of ['KeyV', 'Mouse0', 'Mouse1', 'Mouse2', 'Mouse3', 'Mouse4']) {
       await page.evaluate(async (shortcut) => {
-        await (window as PttWindow).__CUESCORD_DESKTOP__.pushToTalk.configure({
+        const bridge = (window as PttWindow).__CUESCORD_DESKTOP__?.pushToTalk;
+        if (!bridge) throw new Error('Push-to-talk bridge is missing from the trusted frame');
+        await bridge.configure({
           id: shortcut,
           shortcut,
           enabled: true,
@@ -76,18 +89,24 @@ test('Windows sandbox delivers global mouse and keyboard transitions while minim
         await client.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFocused()),
       ).toBe(false);
       await client.evaluate((_electron, shortcut) => {
-        (
-          globalThis as unknown as { pttFixture: { held: Record<string, boolean> } }
-        ).pttFixture.held[shortcut] = true;
+        const fixture = (globalThis as PttFixtureGlobal).pttFixture;
+        if (!fixture) throw new Error('Windows input fixture is unavailable');
+        fixture.held[shortcut] = true;
       }, shortcut);
       await expect.poll(async () => (await state()).pressed).toBe(true);
       await client.evaluate((_electron, shortcut) => {
-        (
-          globalThis as unknown as { pttFixture: { held: Record<string, boolean> } }
-        ).pttFixture.held[shortcut] = false;
+        const fixture = (globalThis as PttFixtureGlobal).pttFixture;
+        if (!fixture) throw new Error('Windows input fixture is unavailable');
+        fixture.held[shortcut] = false;
       }, shortcut);
       await expect.poll(async () => (await state()).pressed).toBe(false);
-      expect(await page.evaluate(() => (window as PttWindow).presses.includes(true))).toBe(true);
+      expect(
+        await page.evaluate(() => {
+          const presses = (window as PttWindow).presses;
+          if (!presses) throw new Error('Input fixture has not started recording transitions');
+          return presses.includes(true);
+        }),
+      ).toBe(true);
     }
     await page.reload();
     await expect.poll(async () => (await state()).global).toBe(false);

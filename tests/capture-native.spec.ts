@@ -1,7 +1,7 @@
 import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { terminateWindowsProcessTree } from './fixtures/electron-process';
 
 test('macOS policy opens the real desktop screen picker without camera or microphone consent', async ({}, testInfo) => {
   test.setTimeout(30000);
@@ -62,11 +62,7 @@ test('macOS policy opens the real desktop screen picker without camera or microp
   } finally {
     await client.close().catch(() => {});
     if (child.exitCode === null) {
-      if (process.platform === 'win32')
-        spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-          windowsHide: true,
-          stdio: 'ignore',
-        });
+      if (process.platform === 'win32') terminateWindowsProcessTree(child.pid);
       else child.kill('SIGKILL');
     }
     server.closeAllConnections();

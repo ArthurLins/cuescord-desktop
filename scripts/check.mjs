@@ -2,7 +2,9 @@ import './build.mjs';
 import { readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { checkArchitecture } from './check-architecture.mjs';
 const root = new URL('../', import.meta.url);
+await checkArchitecture(fileURLToPath(root));
 for (const dir of ['electron', 'scripts', 'customizations', 'dist']) {
   for (const file of await readdir(new URL(`${dir}/`, root), { recursive: true })) {
     if (!/\.[cm]?js$/.test(file)) continue;

@@ -1,21 +1,6 @@
 const { sameOrigin } = require('../security/policy.cjs');
 const { badgePng, callPng } = require('./status-icons.cjs');
-
-function validPresence(value) {
-  if (
-    !value ||
-    !Number.isSafeInteger(value.unreadCount) ||
-    value.unreadCount < 0 ||
-    typeof value.inCall !== 'boolean' ||
-    typeof value.microphoneMuted !== 'boolean'
-  )
-    throw new Error('Estado do desktop inválido.');
-  return {
-    unreadCount: value.unreadCount,
-    inCall: value.inCall,
-    microphoneMuted: value.inCall && value.microphoneMuted,
-  };
-}
+const { validPresence } = require('./presence-policy.cjs');
 
 function installDesktopPresence({
   app,
@@ -143,4 +128,4 @@ function installDesktopPresence({
   };
 }
 
-module.exports = { installDesktopPresence, validPresence };
+module.exports = { installDesktopPresence };

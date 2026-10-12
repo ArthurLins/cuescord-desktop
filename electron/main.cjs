@@ -170,6 +170,7 @@ else {
         getWindow: () => mainWindow,
         trustedUrl,
         audio,
+        listAudioApps: () => require('./audio/audio-linux.cjs').listAudioApps(process.pid),
       });
       app.on('before-quit', audio.revoke);
       const updates = installUpdates({ app, ipcMain, getWindow: () => mainWindow });

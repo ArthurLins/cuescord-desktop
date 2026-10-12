@@ -6,6 +6,21 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { createInstallerZip } = require('../electron/update/archive.cjs');
 const { createApplicationBundle } = require('../electron/update/application.cjs');
+const { DesktopUpdater } = require('../electron/update/updater.cjs');
+const { UpdatePackageStore } = require('../electron/update/package-store.cjs');
+
+export function createUpdater(options) {
+  return new DesktopUpdater({
+    ...options,
+    storage:
+      options.storage ||
+      new UpdatePackageStore({
+        cacheRoot: options.cacheRoot,
+        platform: options.platform,
+        markFile: options.markFile,
+      }),
+  });
+}
 export const policy = require('../electron/update/policy.cjs');
 export const bytes = Buffer.from('a verified installer fixture');
 export function fixture(version = '0.5.0') {

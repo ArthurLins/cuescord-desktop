@@ -2,7 +2,7 @@ import { _electron, expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { terminateWindowsProcessTree } from './fixtures/electron-process';
 
 test('real Windows desktop badges, microphone icons and tray lifecycle', async ({}, testInfo) => {
   test.skip(process.platform !== 'win32', 'Windows taskbar integration');
@@ -127,11 +127,7 @@ test('real Windows desktop badges, microphone icons and tray lifecycle', async (
     await expect.poll(() => page.isClosed()).toBe(true);
     await expect.poll(() => child.exitCode).toBe(0);
   } finally {
-    if (child.exitCode === null)
-      spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
+    if (child.exitCode === null) terminateWindowsProcessTree(child.pid);
     await client.close().catch(() => {});
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

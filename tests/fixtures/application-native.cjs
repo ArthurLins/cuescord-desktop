@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { existsSync } = require('node:fs');
 const { app, BrowserWindow } = require('electron');
 const raw = require('original-fs').promises;
 const updateRoot = process.env.CUESCORD_TEST_APPLICATION_ASAR
@@ -7,7 +8,11 @@ const updateRoot = process.env.CUESCORD_TEST_APPLICATION_ASAR
 const { extractApplicationBundle, verifyApplicationDirectory, metadata } = require(
   path.join(updateRoot, 'application.cjs'),
 );
-const { markDownloadedFile } = require(path.join(updateRoot, 'updater.cjs'));
+// Also exercise cached releases created before the storage boundary was split.
+const markingModule = existsSync(path.join(updateRoot, 'package-store.cjs'))
+  ? 'package-store.cjs'
+  : 'updater.cjs';
+const { markDownloadedFile } = require(path.join(updateRoot, markingModule));
 const { prepareApplication, discardApplication } = require(
   path.join(updateRoot, 'windows-application.cjs'),
 );

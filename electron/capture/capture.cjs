@@ -1,7 +1,8 @@
-const { screenQualities, screenQuality, defaultScreenQuality } = require('./quality.cjs');
+const { screenQualities, defaultScreenQuality } = require('./quality.cjs');
+const { resolveCaptureSelection, captureAudioAllowed } = require('./selection.cjs');
 const { randomUUID } = require('node:crypto');
 const { sameOrigin } = require('../security/policy.cjs');
-const { supportsMacAudio } = require('../audio/audio-mac.cjs');
+const { supportsMacAudio } = require('../audio/capabilities.cjs');
 
 function installCapture({
   session,
@@ -12,6 +13,7 @@ function installCapture({
   audio,
   platform = process.platform,
   macOSRelease = require('node:os').release(),
+  listAudioApps = async () => [],
 }) {
   const macAudio = supportsMacAudio(platform, macOSRelease);
   let pending;
@@ -31,7 +33,7 @@ function installCapture({
   async function audioApps(entry) {
     if (platform !== 'linux') return;
     try {
-      entry.audioApps = await require('../audio/audio-linux.cjs').listAudioApps(process.pid);
+      entry.audioApps = await listAudioApps();
     } catch (error) {
       console.error('Listagem de aplicativos de áudio:', error);
     }
@@ -77,25 +79,12 @@ function installCapture({
   });
   ipcMain.handle('cuescord:capture:select', (event, id, sourceId, options = {}) => {
     if (!authorized(event, id)) throw new Error('Seletor não autorizado.');
-    const kind = options.kind;
-    const source = pending.sources.get(kind)?.find((item) => item.id === sourceId);
-    if (!['window', 'screen'].includes(kind) || !source)
-      throw new Error('Fonte de captura inválida.');
-    const audioApp =
-      kind === 'window' && options.audioApp
-        ? pending.audioApps.find((item) => item.id === options.audioApp)
-        : undefined;
-    if (options.audioApp && !audioApp) throw new Error('Aplicativo de áudio inválido.');
-    if (pending.portal && kind === 'window' && !audioApp)
-      throw new Error('Selecione o aplicativo de áudio.');
-    const quality = screenQuality(options.quality);
-    pending.finish(source, {
-      quality,
-      kind,
-      audioApp,
-      enabled: (kind === 'window' && platform !== 'darwin') || options.audio === true,
-      displayId: source.display_id || undefined,
-    });
+    const { source, selection } = resolveCaptureSelection(
+      { ...pending, platform },
+      sourceId,
+      options,
+    );
+    pending.finish(source, selection);
   });
   ipcMain.handle('cuescord:capture:cancel', (event, id) => {
     if (authorized(event, id)) pending.finish();
@@ -136,11 +125,12 @@ function installCapture({
       contents.removeListener('render-process-gone', cancel);
       if (!contents.isDestroyed()) contents.send('cuescord:capture:close', entry.id);
       if (source && permitted) {
-        const audioEnabled = Boolean(
-          request.audioRequested &&
-            selection?.enabled &&
-            (['win32', 'linux'].includes(platform) || macAudio),
-        );
+        const audioEnabled = captureAudioAllowed({
+          requested: request.audioRequested,
+          enabled: selection?.enabled,
+          platform,
+          macAudio,
+        });
         contents.send('cuescord:capture:quality', selection.quality, audioEnabled);
         audio.authorize(owner, {
           ...selection,

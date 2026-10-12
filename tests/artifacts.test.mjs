@@ -7,10 +7,9 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { collectInstaller } from '../scripts/artifacts.mjs';
 import { signUpdate } from '../scripts/sign-update.mjs';
-import { bytes, fixture, policy } from './update-fixture.mjs';
+import { bytes, fixture, policy, createUpdater } from './update-fixture.mjs';
 const require = createRequire(import.meta.url);
 const { createInstallerZip } = require('../electron/update/archive.cjs');
-const { DesktopUpdater } = require('../electron/update/updater.cjs');
 const legacy = require('./fixtures/update-policy-v1.cjs');
 
 test('matrix packaging -> provenance -> signing -> old/new clients, including skipped releases', async (t) => {
@@ -69,7 +68,7 @@ test('matrix packaging -> provenance -> signing -> old/new clients, including sk
     const selected = legacy.selectArtifact(manifest, '0.4.2', '0.4.2', a.platform, a.arch);
     assert.deepEqual(await readFile(path.join(root, 'artifacts', selected.file)), bytes);
     const requested = [];
-    const updater = new DesktopUpdater({
+    const updater = createUpdater({
       version: '0.4.3',
       platform: a.platform,
       arch: a.arch,
