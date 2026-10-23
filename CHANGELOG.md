@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.16
+
+- Protege os picos antes do ganho automático e do volume por participante, mantendo a margem de saída de -1 dBFS e suavizando mudanças de modo para reduzir clipping e estalos.
+- Preserva detalhes de fala limpa no RNNoise com sinais alinhados e melhora a detecção automática de fala baixa, com análise separada, confirmação neural e retenção de 300 ms.
+- Mantém mute, deafen e liberação do PTT imediatos, sem reproduzir áudio retido ao reabrir o microfone.
+- Expõe diagnósticos por etapa de captura e reprodução, decisões do detector, custo do processamento e seleção/formato dos dispositivos, sem gravar voz ou exportar IDs.
+- Inclui regressões de sobrecarga, ganho de 200%, transições, privacidade e ciclo de vida, além de comparações locais com seis vozes humanas. O aceite no headset e jogo afetados continua necessário.
+
 ## 0.4.15
 
 - Aplica prioridade Alta automaticamente ao processo separado de voz no Windows x64, favorecendo filtros, codecs e transporte quando um jogo disputa CPU, inclusive com o cliente minimizado.

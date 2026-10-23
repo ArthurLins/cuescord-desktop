@@ -22,6 +22,10 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/audio_gate.hpp`: mute, PTT, VAD, ganho e medição na captura.
 - `native/voice/cpp/voice_dynamics.hpp`: rampas de ganho e limitador com antecipação de 5 ms.
 - `native/voice/cpp/voice_mixer.hpp`: volume e reforço das vozes recebidas.
+- `native/voice/cpp/voice_source_gain.hpp`: ganho protegido por participante antes da conversão PCM16.
+- `native/voice/cpp/voice_activity.hpp`: análise de atividade sem alterar o PCM enviado.
+- `native/voice/cpp/audio_capture_observer.hpp` e `voice_signal_metrics.hpp`: agregados por etapa, sem gravação.
+- `native/voice/cpp/audio_endpoint.hpp` e `voice_diagnostics.hpp`: inspeção de endpoints e exportação dos campos permitidos.
 - `native/voice/cpp/voice_health.hpp`: medição e recuperação limitada da qualidade.
 - `native/voice/cpp/audio_priority.hpp`: prioridade do processo de voz e registro MMCSS na thread de áudio.
 - `electron/voice/`: autorização, consulta de dispositivos e ciclo do processo.
@@ -122,15 +126,23 @@ como padrão sem comparar qualidade, atraso e carga nos equipamentos afetados.
 Melhor qualidade não pode ser estabelecida apenas pela data ou nome do modelo.
 Referências: https://github.com/xiph/rnnoise e https://github.com/Rikorose/DeepFilterNet.
 
-VAD automático usa modo 3, reserva de 30 ms para o início da fala e retenção de
-200 ms, como o gate original. Manual/PTT não acrescentam essa reserva. Mutar,
-desmutar ou trocar o modo limpa a reserva para não transmitir áudio anterior.
+VAD automático usa modo 2, normaliza somente uma cópia para análise antes de
+RNNoise/AGC, com ganho máximo de 32 vezes, e exige confirmação neural de fala.
+Mantém reserva de 30 ms para o início e retenção de 300 ms. Manual mantém o limiar
+e 200 ms. Manual/PTT não acrescentam essa reserva, mas o buffer fica aquecido
+para mudanças de modo não inserirem silêncio. Mute, deafen e liberação do PTT
+descartam a reserva e o histórico dos filtros. O áudio recebido durante mute
+não alimenta filtros com estado nem reaparece ao desmutar.
+Com supressão nativa/desligada, o classificador automático analisa uma cópia;
+isso não ativa outro filtro no áudio transmitido. Com RNNoise ativo, a mesma
+inferência é reutilizada. Sobrecarga persistente desativa o modelo e aparece no
+diagnóstico. Manual/PTT com supressão desligada não executa essa classificação.
 O compressor de reprodução continua específico da voz web.
 
 ### Suavização de ganho e prevenção de estalos
 
-O corte por atividade de voz abre e fecha com rampas lineares de 5 ms, depois da
-retenção existente de 200 ms. Ganho de entrada, saída e mudanças do reforço de
+O corte por atividade de voz abre e fecha com rampas lineares de 10 ms, depois da
+retenção de 300 ms no automático ou 200 ms no manual. Ganho de entrada, saída e mudanças do reforço de
 voz também usam rampas de 5 ms. Mute, deafen, volume zero e soltar PTT silenciam
 imediatamente e descartam as amostras pendentes; reabrir não reproduz a cauda
 anterior. As indicações de transmissão incluem a cauda audível do corte natural.
@@ -142,6 +154,22 @@ do buffer; assim, a suavização não permite que um pico curto ultrapasse a mar
 de 1 dB. A recuperação de ganho tem constante de tempo de 80 ms. O ganho e o
 atraso são comuns aos dois canais, para conservar a imagem estéreo. Mudanças de
 formato limpam o histórico. Não há alocações ou locks no processamento.
+
+O RNNoise mantém headroom em float e pode preservar parte da fala limpa usando
+uma cópia seca alinhada aos 20 ms do modelo fixado. Um limiter protege a entrada
+normalizada do AGC; o limiter final mantém o teto de -1 dBFS. O ganho por
+participante fica em 1 no SDK e é aplicado em float com proteção própria antes
+de converter para PCM16. Mudanças de processamento são suavizadas em 5 ms sem
+reiniciar um limiter audível. Isso não recupera saturação anterior ao aplicativo.
+
+`processingDiagnostics` versão 1 distingue `captureDevice` antes do WebRTC,
+`captureInput` após AEC/NS, processamento, saída protegida e reprodução. Exporta
+RMS/pico, contadores de nível excessivo, zeros e saltos, limiters e decisões/custo
+do detector. Formato do PCM observado e formato compartilhado inspecionado do
+endpoint são campos distintos. `audioDevices` distingue seleção explícita,
+padrão e fallback. Campos sem observação ficam ausentes; nenhum PCM ou ID de
+dispositivo é exportado. Uma lacuna ou amostra próxima do limite não diagnostica
+sozinha um estalo ou falha USB.
 
 Essa antecipação acrescenta 5 ms à captura e 5 ms à reprodução (10 ms no caminho
 completo entre dois clientes), além das latências existentes e da reserva de

@@ -37,9 +37,11 @@ using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 
 #include "audio_devices.hpp"
+#include "audio_capture_observer.hpp"
 #include "audio_gate.hpp"
 #include "voice_health.hpp"
 #include "voice_mixer.hpp"
+#include "voice_diagnostics.hpp"
 #ifdef CUESCORD_VOICE_TRACE
 #include "Logger.hpp"
 class FunctionTrace final : public mediasoupclient::Logger::LogHandlerInterface {
@@ -66,6 +68,7 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   std::unique_ptr<webrtc::TaskQueueFactory> queues;
   webrtc::scoped_refptr<webrtc::AudioDeviceModule> adm;
   webrtc::scoped_refptr<webrtc::AudioProcessing> apm;
+  webrtc::scoped_refptr<VoiceMixer> voiceMixer;
   webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;
   webrtc::scoped_refptr<webrtc::AudioTrackInterface> microphone;
   mediasoupclient::PeerConnection::Options options;
@@ -155,16 +158,19 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
       adm = webrtc::CreateAudioDeviceModule(webrtc::CreateEnvironment(),
                                             webrtc::AudioDeviceModule::kPlatformDefaultAudio);
 #endif
+      if (!adm) return false;
+      adm = webrtc::CreateAudioDeviceWithDataObserver(adm, std::make_unique<CaptureSignalObserver>(controls));
       return adm && adm->Init() == 0;
     });
     if (!initialized) throw std::runtime_error("audio device unavailable");
     webrtc::BuiltinAudioProcessingBuilder builder;
     builder.SetCapturePostProcessing(std::make_unique<Gate>(controls));
     apm = builder.Build(webrtc::CreateEnvironment());
+    voiceMixer = webrtc::make_ref_counted<VoiceMixer>(controls);
     factory = webrtc::CreatePeerConnectionFactory(
         network.get(), worker.get(), signaling.get(), adm,
         webrtc::CreateBuiltinAudioEncoderFactory(), webrtc::CreateBuiltinAudioDecoderFactory(),
-        nullptr, nullptr, webrtc::make_ref_counted<VoiceMixer>(controls), apm);
+        nullptr, nullptr, voiceMixer, apm);
     if (!factory) throw std::runtime_error("voice factory unavailable");
     options.factory = factory.get();
     options.config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
@@ -197,7 +203,10 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
   void volume(mediasoupclient::Consumer* consumer) {
     auto* track = static_cast<webrtc::AudioTrackInterface*>(consumer->GetTrack());
     const auto id = consumer->GetProducerId();
-    track->GetSource()->SetVolume(volumes.count(id) ? volumes[id] : 1);
+    track->GetSource()->SetVolume(1);
+    const auto& encoding = consumer->GetRtpParameters().at("encodings").at(0);
+    voiceMixer->setSourceVolume(encoding.at("ssrc").get<uint32_t>(),
+                                float(volumes.count(id) ? volumes[id] : 1));
   }
   static Json browserStats(Json rows) {
     // libwebrtc RTCStats::ToJson uses microseconds; RTCStatsReport in JS uses
@@ -367,6 +376,11 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
           ? 0 : encodingParameters[0].max_bitrate_bps.value_or(0);
       return {{"send", send ? browserStats(send->GetStats()) : Json::array()},
               {"recv", recv ? browserStats(recv->GetStats()) : Json::array()},
+              {"sendConnectionState", send ? send->GetConnectionState() : "missing"},
+              {"recvConnectionState", recv ? recv->GetConnectionState() : "missing"},
+              {"processingDiagnostics", cuescord::processingMeasurements(controls)},
+              {"audioDevices", {{"input", cuescord::endpointMeasurements(audioDevices.describe(*worker, *adm, true))},
+                                {"output", cuescord::endpointMeasurements(audioDevices.describe(*worker, *adm, false))}}},
               {"captureFrames", controls.frames.load()},
               {"inputLevel", controls.level.load()},
               {"engine", "libwebrtc-m140"},
@@ -585,6 +599,7 @@ class Engine final : public mediasoupclient::SendTransport::Listener,
     microphone = nullptr;
     device.reset();
     factory = nullptr;
+    voiceMixer = nullptr;
     apm = nullptr;
     if (worker && adm)
       worker->BlockingCall([&] {

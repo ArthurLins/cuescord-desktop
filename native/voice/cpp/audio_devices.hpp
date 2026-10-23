@@ -5,12 +5,15 @@
 #include <stdexcept>
 #include <string>
 
+#include "audio_endpoint.hpp"
+
 // ADM is worker-affine. Driver errors are returned to the control thread rather
 // than throwing through WebRTC's task runner. A disappeared endpoint selects
 // the communication default; WASAPI also restarts after device notifications.
 class AudioDevices {
   std::string inputId, outputId;
   bool selected = false;
+  bool inputMatched = false, outputMatched = false;
 
  public:
   bool restartCapture(webrtc::Thread& worker, webrtc::AudioDeviceModule& adm) {
@@ -19,9 +22,46 @@ class AudioDevices {
              adm.StartRecording() == 0;
     });
   }
+  struct Selection {
+    std::string mode, label;
+    bool requestedMatched = false;
+    EndpointInspection endpoint;
+  };
+  Selection describe(webrtc::Thread& worker, webrtc::AudioDeviceModule& adm, bool input) const {
+    return worker.BlockingCall([&] {
+      const auto& id = input ? inputId : outputId;
+      const bool matched = input ? inputMatched : outputMatched;
+      Selection result;
+      result.mode = !selected    ? "unselected"
+                    : id.empty() ? "communications-default"
+                    : matched    ? "explicit"
+                                 : "missing-device-fallback";
+      result.requestedMatched = matched;
+      result.endpoint = inspectAudioEndpoint(input, matched ? id : "");
+      const auto effectiveId = result.endpoint.id.empty() && matched ? id : result.endpoint.id;
+      const int count = input ? adm.RecordingDevices() : adm.PlayoutDevices();
+      for (int i = 0; i < count; ++i) {
+        char name[webrtc::kAdmMaxDeviceNameSize]{}, guid[webrtc::kAdmMaxGuidSize]{};
+        const int status =
+            input ? adm.RecordingDeviceName(i, name, guid) : adm.PlayoutDeviceName(i, name, guid);
+        if (status == 0 && effectiveId == guid) {
+          result.label = name;
+#ifndef _WIN32
+          result.endpoint.present = true;
+          result.endpoint.presenceAvailable = true;
+#endif
+          break;
+        }
+      }
+      return result;
+    });
+  }
   void select(webrtc::Thread& worker, webrtc::AudioDeviceModule& adm, const std::string& nextInput,
               const std::string& nextOutput) {
-    if (selected && nextInput == inputId && nextOutput == outputId) return;
+    if (selected && nextInput == inputId && nextOutput == outputId &&
+        (nextInput.empty() || inputMatched) && (nextOutput.empty() || outputMatched))
+      return;
+    bool nextInputMatched = false, nextOutputMatched = false;
     const bool ok = worker.BlockingCall([&] {
       const bool recording = adm.Recording(), playing = adm.Playing();
       if ((recording && adm.StopRecording() != 0) || (playing && adm.StopPlayout() != 0))
@@ -51,14 +91,24 @@ class AudioDevices {
           if ((input ? adm.SetRecordingDevice(device) : adm.SetPlayoutDevice(device)) != 0)
             return false;
         }
+        if (input)
+          nextInputMatched = matched;
+        else
+          nextOutputMatched = matched;
       }
       if (recording && (adm.InitRecording() != 0 || adm.StartRecording() != 0)) return false;
       if (playing && (adm.InitPlayout() != 0 || adm.StartPlayout() != 0)) return false;
       return true;
     });
-    if (!ok) throw std::runtime_error("audio endpoint unavailable");
+    if (!ok) {
+      selected = false;
+      inputMatched = outputMatched = false;
+      throw std::runtime_error("audio endpoint unavailable");
+    }
     inputId = nextInput;
     outputId = nextOutput;
     selected = true;
+    inputMatched = nextInputMatched;
+    outputMatched = nextOutputMatched;
   }
 };

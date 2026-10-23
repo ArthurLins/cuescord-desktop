@@ -76,6 +76,28 @@ test('real sandbox selects native voice automatically and revokes a helper on na
       return rows.every((row) => row.kind === 'audioinput' || row.kind === 'audiooutput');
     }, id);
     expect(devices).toBe(true);
+    const diagnostics = await page.evaluate(async (sessionId) => {
+      const bridge = (window as NativeVoiceTestWindow).__CUESCORD_DESKTOP__?.nativeVoice;
+      if (!bridge) throw new Error('Native voice bridge is missing');
+      return bridge.request<{
+        processPriorityClass: number;
+        processingDiagnostics: {
+          version: number;
+          captureInputStage: string;
+          speechClassifierActive: boolean;
+          speechClassifierFrames: number;
+          signals: Record<string, { frames?: number }>;
+        };
+        audioDevices: { input: { selection: string } };
+      }>(sessionId, 'stats');
+    }, id);
+    expect(diagnostics.processingDiagnostics.version).toBe(1);
+    expect(diagnostics.processingDiagnostics.captureInputStage).toBe('post-apm');
+    expect(diagnostics.processingDiagnostics.speechClassifierActive).toBe(false);
+    expect(diagnostics.processingDiagnostics.speechClassifierFrames).toBe(0);
+    expect(diagnostics.processingDiagnostics.signals.captureDevice.frames).toBeUndefined();
+    expect(diagnostics.audioDevices.input.selection).toBe('unselected');
+    expect(diagnostics.processPriorityClass).toBe(128);
     await page.reload();
     await expect.poll(async () => (await read()).active).toBe(false);
     expect(

@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -8,6 +9,7 @@
 void check(bool condition, const char* message) {
   if (!condition) throw std::runtime_error(message);
 }
+#include "capture_quality_test.hpp"
 int main() {
   Controls controls;
   Gate gate(controls);
@@ -18,6 +20,11 @@ int main() {
     return audio.channels()[0][audio.num_frames() - 1];
   };
   try {
+    checkSignalObservation();
+    checkProcessingTransitions();
+    checkCaptureHeadroomAndPrivacy();
+    checkQuietDetection();
+    checkAutomaticBackgroundRejection();
     check(frame(4000) == 0, "default must be muted");
     controls.muted = false;
     check(frame(4000) > 0, "voice activity should pass speech");

@@ -31,6 +31,44 @@ class GainRamp {
   }
 };
 
+// Processing/mode changes can change delay or gain. Bridge that boundary with
+// a short cubic correction instead of resetting a live limiter to zero.
+// Explicit mute/PTT release calls reset and never emits this previous signal.
+class FrameTransition {
+  std::array<float, 2> previous{}, correction{};
+  size_t position = 0, length = 0;
+  bool pending = false, initialized = false;
+
+ public:
+  void reset() {
+    pending = initialized = false;
+    position = length = 0;
+  }
+  void request(size_t samples) {
+    pending = true;
+    length = std::max<size_t>(1, samples);
+  }
+  void process(float* const* channels, size_t channelCount, size_t count) {
+    if (channelCount == 0 || channelCount > previous.size() || count == 0) return;
+    if (pending) {
+      for (size_t c = 0; c < channelCount; ++c)
+        correction[c] = initialized ? previous[c] - channels[c][0] : 0;
+      position = 0;
+      pending = false;
+    }
+    for (size_t i = 0; i < count; ++i) {
+      const double t = length ? std::min(1.0, double(position) / length) : 1;
+      const double weight = (1 - t) * (1 - t) * (1 + 2 * t);
+      for (size_t c = 0; c < channelCount; ++c) {
+        channels[c][i] += float(correction[c] * weight);
+        previous[c] = channels[c][i];
+      }
+      if (position < length) ++position;
+    }
+    initialized = true;
+  }
+};
+
 // Linked-channel, S16-scaled limiter with 5 ms look-ahead and 80 ms release.
 // A running minimum followed by a moving average smooths gain across callbacks.
 // Every term in that average includes the delayed sample's required attenuation,

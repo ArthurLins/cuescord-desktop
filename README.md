@@ -65,6 +65,35 @@ WebKitGTK ou WebView2. Electron inclui Chromium e Node no instalador.
   Windows; uma falha ao elevar a prioridade não impede a chamada.
   Essa política não reserva CPU, altera o bitrate nem elimina problemas de rede,
   drivers ou sobrecarga extrema da máquina.
+- A voz nativa mantém os picos em ponto flutuante até limitadores com antecipação
+  de 5 ms e teto de -1 dBFS, antes do ganho automático e após o volume de entrada;
+  o mixer também protege o volume de reprodução e o reforço de voz. O volume
+  individual fica em unity no SDK; o ganho por participante passa por
+  um limiter próprio antes da conversão para PCM16, evitando saturação anterior
+  ao mixer. Esse ganho possui rampa, mute imediato e descarte ao remover a fonte.
+  O RNNoise
+  preserva parte do detalhe de fala limpa com uma cópia alinhada ao atraso do
+  modelo, sem misturar sinais de instantes diferentes. O detector automático
+  normaliza somente sua cópia de análise, usa VAD modo 2 com confirmação neural
+  e mantém 300 ms de sustentação. A análise ocorre antes do RNNoise/AGC para não
+  confundir seus resíduos com fala. No modo automático, o modelo também confirma
+  fala com a supressão desligada ou nativa: somente uma cópia é analisada, sem
+  aplicar outro filtro ao áudio. Com RNNoise ativo, a mesma inferência é reutilizada.
+  Os diagnósticos distinguem esse custo e o fallback em caso de sobrecarga.
+  Isso não aumenta o volume enviado. A análise manual mantém seu
+  limiar e 200 ms de sustentação; mute, deafen e liberação do PTT descartam áudio
+  imediatamente. Mudanças de modo preservam o histórico do limiter e suavizam
+  a transição, sem introduzir um buffer vazio no fluxo que já estava audível.
+- Os diagnósticos nativos exportam níveis RMS/pico, amostras próximas do limite,
+  quadros silenciosos e valores não finitos antes do AEC, após processamento e
+  na saída protegida, além de decisões do detector, ganho de análise, classe de
+  prioridade e formato do PCM entregue pelo dispositivo. O formato compartilhado
+  do endpoint é informado separadamente; não representa o formato negociado pelo
+  WebRTC. Seleção explícita, padrão de comunicações e fallback por dispositivo
+  ausente ficam distintos. Somente agregados são exportados: não há gravação de
+  voz nem IDs de dispositivos no diagnóstico. A aplicação web deve consumir os
+  campos opcionais `processingDiagnostics` versão 1 e `audioDevices`, preservando
+  compatibilidade com helpers anteriores.
 - No Windows, o ícone da barra de tarefas mostra as mensagens não lidas (`99+`
   acima de 99). Durante uma chamada, os ícones da janela e da bandeja mostram um
   telefone com o microfone ativado ou desativado. Ao sair, volta o ícone normal.

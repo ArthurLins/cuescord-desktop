@@ -23,6 +23,7 @@ class Tone final : public webrtc::AudioMixer::Source {
   int Ssrc() const override { return 1; }
   int PreferredSampleRate() const override { return 48000; }
 };
+#include "source_gain_test.hpp"
 static void checkDynamics() {
   constexpr double pi = 3.141592653589793;
   // Arbitrary callback partitions must produce the same waveform and timing.
@@ -119,6 +120,8 @@ static void checkDynamics() {
 }
 int main() {
   try {
+    checkIndividualVoiceGain();
+    checkSourceGainLifecycle();
 #ifdef _WIN32
     const DWORD originalPriority = GetPriorityClass(GetCurrentProcess());
     check(originalPriority != 0, "the original process priority must be readable");
