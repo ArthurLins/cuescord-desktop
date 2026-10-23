@@ -17,6 +17,8 @@ struct Controls {
   std::atomic<bool> autoGain{false}, voiceBoost{true};
   std::atomic<bool> autoGainActive{false};
   std::atomic<uint64_t> autoGainErrors{0}, autoGainFrames{0};
+  std::atomic<float> autoGainApiHeadroomDb{0}, autoGainApiPeakDbfs{-120};
+  std::atomic<uint64_t> autoGainApiFullScaleSamples{0};
   std::atomic<bool> captureMmcss{false}, renderMmcss{false};
   std::atomic<bool> captureMmcssInherited{false}, renderMmcssInherited{false};
   std::atomic<unsigned> capturePriorityError{0}, renderPriorityError{0};

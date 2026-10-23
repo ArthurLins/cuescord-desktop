@@ -20,6 +20,7 @@ suas licenças. O backend C++ adapta APIs C++; não reimplementa WebRTC em Rust.
 - `native/voice/cpp/engine.cpp`: threads, mídia, sinalização e ciclo de vida.
 - `native/voice/cpp/audio_devices.hpp`: seleção e recuperação de dispositivos.
 - `native/voice/cpp/audio_gate.hpp`: mute, PTT, VAD, ganho e medição na captura.
+- `native/voice/cpp/voice_auto_gain.hpp`: AGC2 com margem interna e proteção da conversão normalizada.
 - `native/voice/cpp/voice_dynamics.hpp`: rampas de ganho e limitador com antecipação de 5 ms.
 - `native/voice/cpp/voice_mixer.hpp`: volume e reforço das vozes recebidas.
 - `native/voice/cpp/voice_source_gain.hpp`: ganho protegido por participante antes da conversão PCM16.
@@ -105,7 +106,12 @@ desligar o conjunto de melhorias. AEC e AGC continuam independentes. O RNNoise �
 aplicado depois de AEC e antes do AGC2, medição, VAD, mute/PTT e ganho de entrada.
 AGC2 tem margem de 6 dB, ganho adaptativo máximo de 18 dB e subida limitada a
 3 dB/s. Roda em uma etapa APM pública separada, sem aplicar AEC ou supressão de
-ruído novamente. O ganho manual de até 200% passa por um limitador de picos que
+ruído novamente. Antes dessa API, o sinal é atenuado em 18,0618 dB (fator 1/8);
+os alvos de fala e ruído são deslocados pelo mesmo valor. A atenuação é revertida
+em float depois do AGC, antes do limitador final. Com ganho adaptativo máximo de
+18 dB e entrada protegida em -1 dBFS, o sinal interno continua abaixo do teto da
+API mesmo numa passagem abrupta de fala baixa para alta. Não há atraso adicional
+por esse ajuste. O ganho manual de até 200% passa por um limitador de picos que
 varia a atenuação por amostra, com antecipação de 5 ms. Isso protege a saída
 digital; saturação que já ocorreu no microfone/driver não pode ser desfeita.
 Quando RNNoise está ativo, a supressão do WebRTC fica desligada para não filtrar
@@ -157,7 +163,8 @@ formato limpam o histórico. Não há alocações ou locks no processamento.
 
 O RNNoise mantém headroom em float e pode preservar parte da fala limpa usando
 uma cópia seca alinhada aos 20 ms do modelo fixado. Um limiter protege a entrada
-normalizada do AGC; o limiter final mantém o teto de -1 dBFS. O ganho por
+normalizada do AGC; a margem interna também impede saturação causada pelo próprio
+ganho adaptativo. O limiter final mantém o teto de -1 dBFS. O ganho por
 participante fica em 1 no SDK e é aplicado em float com proteção própria antes
 de converter para PCM16. Mudanças de processamento são suavizadas em 5 ms sem
 reiniciar um limiter audível. Isso não recupera saturação anterior ao aplicativo.
@@ -171,8 +178,21 @@ padrão e fallback. Campos sem observação ficam ausentes; nenhum PCM ou ID de
 dispositivo é exportado. Uma lacuna ou amostra próxima do limite não diagnostica
 sozinha um estalo ou falha USB.
 
-Essa antecipação acrescenta 5 ms à captura e 5 ms à reprodução (10 ms no caminho
-completo entre dois clientes), além das latências existentes e da reserva de
+Os campos opcionais `autoGainApiHeadroomDb`, `autoGainApiPeakDbfs` e
+`autoGainApiFullScaleSamples` medem a margem, o maior pico e as amostras no limite
+da API do AGC, antes de restaurar a escala. Ficam ausentes até observar um bloco
+com AGC. A versão do diagnóstico continua 1 e clientes antigos podem omiti-los.
+Depois da restauração, `captureProcessed.nearFullScaleSamples` pode crescer com
+picos em float acima de 0 dBFS sem que tenham sido cortados; confira a etapa da
+API e `captureOutput` para distinguir margem em float de saturação irreversível.
+
+A revisão m140 fixada usa hard clipping no limitador interno do AGC, antes da
+saída normalizada. Limitar somente a saída final não desfaz esse achatamento.
+A proteção usa a API existente e conserva os objetos/ABI originais do SDK.
+Referência: [limitador da revisão do SDK](https://webrtc.googlesource.com/src/+/36ea4535a500ac137dbf1f577ce40dc1aaa774ef/modules/audio_processing/agc2/limiter.cc).
+
+A antecipação acrescenta 5 ms à captura sem AGC e 10 ms com AGC, incluindo sua
+proteção de entrada, mais 5 ms à reprodução, além das latências existentes e da reserva de
 30 ms do VAD automático. O comportamento independe das divisões dos callbacks;
 o limitador recebe o sample rate real da captura/reprodução, entre 8 e 48 kHz.
 Os contadores de limitação consideram a menor atenuação aplicada em cada bloco.
@@ -325,7 +345,9 @@ local quando suporta LZMA. Os runners de CI já incluem 7-Zip.
 saída finita, bypass, reinicialização e formato incompatível. O teste mede o
 tempo de processamento; ruído sintético não comprova qualidade de fala real.
 `VoiceGateTests` cobre RNNoise + AGC + ganho de 200%, mute/PTT, sobrecarga do filtro,
-rampas de abertura/fechamento e descarte da cauda ao soltar PTT.
+rampas de abertura/fechamento e descarte da cauda ao soltar PTT. Também cobre
+transições abruptas entre níveis baixos/altos, margem na API interna do AGC e
+preservação de picos em float até o limitador final.
 `VoiceQualityTests` cobre continuidade por amostra, callbacks com tamanhos distintos,
 picos de uma amostra, áudio aleatório, estéreo e mudanças de formato em 8–48 kHz,
 além de margem, mix/deafen e recuperação com

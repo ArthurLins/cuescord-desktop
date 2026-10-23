@@ -56,6 +56,10 @@ inline nlohmann::json processingMeasurements(const Controls& controls) {
     result.update({{"deviceSampleRate", controls.captureDeviceRate.load()},
                    {"deviceChannels", controls.captureDeviceChannels.load()},
                    {"deviceBytesPerFrame", controls.captureDeviceBytesPerFrame.load()}});
+  if (controls.autoGainFrames.load() > 0)
+    result.update({{"autoGainApiHeadroomDb", controls.autoGainApiHeadroomDb.load()},
+                   {"autoGainApiPeakDbfs", controls.autoGainApiPeakDbfs.load()},
+                   {"autoGainApiFullScaleSamples", controls.autoGainApiFullScaleSamples.load()}});
   if (controls.captureProcessingRate.load() == 0) {
     result.erase("sampleRate");
     result.erase("channels");

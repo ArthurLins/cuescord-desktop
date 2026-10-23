@@ -34,7 +34,8 @@ inline void checkSignalObservation() {
         "a zero PCM block after a loud signal must remain observable even with regular callbacks");
   const auto report = cuescord::processingMeasurements(controls);
   check(report.at("signals").at("captureDevice").at("nearFullScaleSamples") == 2 &&
-            report.at("signals").at("captureOutput").empty(),
+            report.at("signals").at("captureOutput").empty() &&
+            !report.contains("autoGainApiFullScaleSamples"),
         "unobserved stages must remain unavailable rather than claim silence or safe output");
   AudioDevices::Selection selection;
   selection.mode = "missing-device-fallback";
@@ -44,6 +45,41 @@ inline void checkSignalObservation() {
             !deviceReport.contains("endpointPresent") &&
             deviceReport.dump().find("PRIVATE") == std::string::npos,
         "endpoint reports must omit unavailable presence and private identifiers");
+}
+
+inline void checkGainControlTransientHeadroom() {
+  Controls controls;
+  controls.muted = false;
+  controls.activity = false;
+  controls.ptt = true;
+  controls.autoGain = true;
+  controls.noiseMode = NoiseMode::Off;
+  Gate gate(controls);
+  gate.Initialize(48000, 1);
+  webrtc::AudioBuffer audio(48000, 1, 48000, 1, 48000, 1);
+  constexpr int frames = 300;
+  for (int frame = 0; frame < frames; ++frame) {
+    const float amplitude = frame % 60 < 40 ? 200.0f : 30000.0f;
+    for (size_t i = 0; i < 480; ++i)
+      audio.channels()[0][i] = amplitude * std::sin((frame * 480 + i) * .02265);
+    gate.Process(&audio);
+    for (size_t i = 0; i < 480; ++i)
+      check(std::isfinite(audio.channels()[0][i]) && std::abs(audio.channels()[0][i]) <= 29204,
+            "quiet-to-loud microphone transitions must keep protected final peaks");
+  }
+  check(controls.autoGainFrames == frames && controls.autoGainErrors == 0 &&
+            controls.autoGainActive,
+        "safe staging must keep adaptive gain processing active on every frame");
+  check(controls.autoGainApiPeakDbfs < -1 && controls.autoGainApiPeakDbfs > -120 &&
+            controls.autoGainApiFullScaleSamples == 0,
+        "AGC's normalized API must retain headroom before its irreversible hard clipper");
+  check(controls.captureProcessed.nearFullScaleSamples > 0 &&
+            controls.captureOutput.nearFullScaleSamples == 0,
+        "restored float peaks must reach the smooth final limiter without being flattened first");
+  const auto report = cuescord::processingMeasurements(controls);
+  check(report.at("autoGainApiFullScaleSamples") == 0 &&
+            report.at("autoGainApiHeadroomDb").get<float>() > 18,
+        "diagnostics must distinguish internal API safety from restored float headroom");
 }
 
 inline void checkProcessingTransitions() {

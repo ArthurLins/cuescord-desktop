@@ -1,7 +1,5 @@
 #pragma once
 #include <api/audio/audio_processing.h>
-#include <api/audio/builtin_audio_processing_builder.h>
-#include <api/environment/environment_factory.h>
 #include <modules/audio_processing/audio_buffer.h>
 
 #include <algorithm>
@@ -12,6 +10,7 @@
 
 #include "audio_priority.hpp"
 #include "voice_activity.hpp"
+#include "voice_auto_gain.hpp"
 #include "voice_controls.hpp"
 #include "voice_dynamics.hpp"
 
@@ -27,13 +26,10 @@ class Gate final : public webrtc::CustomProcessing {
   uint32_t noiseRevision = 0;
   unsigned slowNoiseFrames = 0;
   const uint64_t noiseBudgetMicros;
-  webrtc::Environment environment = webrtc::CreateEnvironment();
-  webrtc::scoped_refptr<webrtc::AudioProcessing> gainController;
-  std::array<std::array<float, 480>, 2> gainScratch{};
+  AutomaticVoiceGain gainController{controls};
   std::array<float, 480> classifierScratch{};
-  std::array<std::array<float, 480>, 2> preGainScratch{};
   GainRamp activityGain;
-  PeakLimiter preGainLimiter, limiter;
+  PeakLimiter limiter;
   FrameTransition transition;
   SignalMeter inputMeter, processedMeter, outputMeter;
   std::chrono::steady_clock::time_point previousFrame{};
@@ -58,7 +54,7 @@ class Gate final : public webrtc::CustomProcessing {
     release = 0;
     activityGain.reset();
     limiter.reset();
-    preGainLimiter.reset();
+    gainController.reset();
     transition.reset();
     noise.resetHistory();
     detector.reset();
@@ -146,42 +142,6 @@ class Gate final : public webrtc::CustomProcessing {
     controls.speechProbability = automatic ? noise.speech() : 0;
     recordSpeechModelCost(filtering, automatic, micros);
   }
-  void applyAutoGain(webrtc::AudioBuffer& audio) {
-    bool applied = false;
-    const auto count = audio.num_frames(), channels = audio.num_channels();
-    if (controls.autoGain.load() && gainController && count == size_t(sampleRate / 100) &&
-        count <= 480 && channels > 0 && channels <= 2) {
-      float* pointers[] = {gainScratch[0].data(), gainScratch[1].data()};
-      for (size_t c = 0; c < channels; ++c)
-        for (size_t i = 0; i < count; ++i)
-          pointers[c][i] =
-              std::isfinite(audio.channels()[c][i]) ? audio.channels()[c][i] / 32768.0f : 0;
-      const webrtc::StreamConfig format(sampleRate, channels);
-      if (gainController->ProcessStream(pointers, format, format, pointers) == 0) {
-        applied = true;
-        ++controls.autoGainFrames;
-        for (size_t c = 0; c < channels; ++c)
-          for (size_t i = 0; i < count; ++i) audio.channels()[c][i] = pointers[c][i] * 32768.0f;
-      } else
-        ++controls.autoGainErrors;
-    }
-    controls.autoGainActive = applied;
-  }
-  void protectAutoGainInput(webrtc::AudioBuffer& audio, bool enabled) {
-    const auto count = audio.num_frames(), channels = audio.num_channels();
-    if (count > 480 || channels == 0 || channels > 2) return;
-    float* buffers[] = {preGainScratch[0].data(), preGainScratch[1].data()};
-    for (size_t c = 0; c < channels; ++c) std::copy_n(audio.channels()[c], count, buffers[c]);
-    // Keep the protection delay warm when bypassed. Enabling AGC must not insert
-    // a fresh 5 ms hole into an already audible stream.
-    const float attenuation =
-        preGainLimiter.process(buffers, channels, count, enabled ? 1 : 0, sampleRate);
-    const bool applied = controls.autoGain.load();
-    if (applied)
-      for (size_t c = 0; c < channels; ++c) std::copy_n(buffers[c], count, audio.channels()[c]);
-    controls.preGainLimiterGain = applied ? attenuation : 1;
-    if (applied && attenuation < .999f) ++controls.limitedPreGainFrames;
-  }
   float measureLevel(const webrtc::AudioBuffer& audio) {
     double energy = 0;
     for (size_t c = 0; c < audio.num_channels(); ++c)
@@ -249,24 +209,11 @@ class Gate final : public webrtc::CustomProcessing {
     controls.noiseActive = false;
     slowNoiseFrames = 0;
     limiter.initialize(rate, channels);
-    preGainLimiter.initialize(rate, channels);
+    gainController.initialize(rate, channels);
     inputMeter.reset();
     processedMeter.reset();
     outputMeter.reset();
     previousFrame = {};
-    webrtc::AudioProcessing::Config config;
-    config.gain_controller2.enabled = true;
-    config.gain_controller2.adaptive_digital.enabled = true;
-    config.gain_controller2.adaptive_digital.headroom_db = 6;
-    config.gain_controller2.adaptive_digital.max_gain_db = 18;
-    config.gain_controller2.adaptive_digital.initial_gain_db = 6;
-    config.gain_controller2.adaptive_digital.max_gain_change_db_per_second = 3;
-    gainController = webrtc::BuiltinAudioProcessingBuilder(config).Build(environment);
-    webrtc::ProcessingConfig format;
-    format.input_stream() = webrtc::StreamConfig(rate, channels);
-    format.output_stream() = webrtc::StreamConfig(rate, channels);
-    if (!gainController || gainController->Initialize(format) != 0) gainController = nullptr;
-    controls.autoGainActive = false;
   }
   std::string ToString() const override { return "Cuescord voice gate"; }
   void Process(webrtc::AudioBuffer* audio) override {
@@ -289,10 +236,7 @@ class Gate final : public webrtc::CustomProcessing {
     const bool analyzedSpeech =
         automatic && detector.detect(audio->channels()[0], audio->num_frames());
     processNoise(*audio, automatic);
-    // AGC's normalized-float API must not receive already clipped RNNoise peaks.
-    // The final limiter is sufficient when the normalized-float AGC API is off.
-    protectAutoGainInput(*audio, enabled);
-    applyAutoGain(*audio);
+    gainController.process(*audio, enabled);
     processedMeter.observe(audio->channels(), audio->num_channels(), audio->num_frames(),
                            controls.captureProcessed);
     const float level = measureLevel(*audio);

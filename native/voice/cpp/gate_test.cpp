@@ -23,6 +23,7 @@ int main() {
     checkSignalObservation();
     checkProcessingTransitions();
     checkCaptureHeadroomAndPrivacy();
+    checkGainControlTransientHeadroom();
     checkQuietDetection();
     checkAutomaticBackgroundRejection();
     check(frame(4000) == 0, "default must be muted");
